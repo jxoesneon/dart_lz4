@@ -1,6 +1,8 @@
-# lz4
+# dart_lz4
 
 Pure Dart implementation of LZ4 (block + frame) with planned LZ4HC support.
+
+Repository: https://github.com/jxoesneon/lz4
 
 ## Status
 
