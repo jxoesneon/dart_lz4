@@ -4,7 +4,7 @@ class Lz4Exception implements Exception {
   const Lz4Exception(this.message);
 
   @override
-  String toString() => '${runtimeType}: $message';
+  String toString() => '$runtimeType: $message';
 }
 
 class Lz4FormatException extends Lz4Exception {
