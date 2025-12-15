@@ -1,11 +1,11 @@
-name: lz4
+name: dart_lz4
 description: Pure Dart LZ4 and LZ4HC (block + frame) with streaming support.
 version: 0.0.1
 repository: https://github.com/jxoesneon/lz4
 issue_tracker: https://github.com/jxoesneon/lz4/issues
 
 environment:
-  sdk: '>=3.3.0 <4.0.0'
+  sdk: ">=3.3.0 <4.0.0"
 
 dependencies:
 
