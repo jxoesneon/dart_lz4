@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
-import 'package:lz4/src/internal/byte_writer.dart';
-import 'package:lz4/src/internal/lz4_exception.dart';
+import 'package:dart_lz4/src/internal/byte_writer.dart';
+import 'package:dart_lz4/src/internal/lz4_exception.dart';
 import 'package:test/test.dart';
 
 void main() {
