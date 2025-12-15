@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security issues
+    url: https://github.com/jxoesneon/lz4/security/advisories
+    about: Please report security vulnerabilities via GitHub Security Advisories.
+  - name: Questions / discussions
+    url: https://github.com/jxoesneon/lz4/issues
+    about: Use GitHub issues for questions until Discussions are enabled.
