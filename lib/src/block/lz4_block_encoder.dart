@@ -141,7 +141,8 @@ void _writeSequence(
   }
 }
 
-void _writeLastLiterals(ByteWriter writer, Uint8List src, int start, int length) {
+void _writeLastLiterals(
+    ByteWriter writer, Uint8List src, int start, int length) {
   final tokenLiteral = length < 15 ? length : 15;
   writer.writeUint8(tokenLiteral << 4);
 
