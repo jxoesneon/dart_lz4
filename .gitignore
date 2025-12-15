@@ -1,0 +1,53 @@
+# Local workspace / tooling
+.windsurf/
+
+# Dart / pub
+.dart_tool/
+.packages
+.pub/
+build/
+coverage/
+# Package lockfiles are typically not checked in for libraries
+pubspec.lock
+
+# Dart compiled outputs
+*.dill
+*.aot
+*.snapshot
+
+# Logs
+*.log
+
+# IDEs / editors
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# OS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Temporary / swap files
+*.swp
+*.swo
+*.tmp
+*~
+
+# Flutter (in case this repo is used with Flutter tooling)
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages.generated
+
+# Secrets (defense in depth; secrets should never be committed)
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+.env
+.env.*
