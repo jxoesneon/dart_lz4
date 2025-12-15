@@ -41,7 +41,8 @@ Uint8List lz4BlockDecompress(
 
     if (writer.length == decompressedSize) {
       if (!reader.isEOF) {
-        throw const Lz4CorruptDataException('Trailing bytes after end of block');
+        throw const Lz4CorruptDataException(
+            'Trailing bytes after end of block');
       }
       return writer.toBytes();
     }
