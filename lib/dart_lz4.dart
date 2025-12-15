@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'src/block/lz4_block_decoder.dart';
+
 enum Lz4CompressionLevel {
   fast,
   hc,
@@ -17,7 +19,7 @@ Uint8List lz4Decompress(
   Uint8List src, {
   required int decompressedSize,
 }) {
-  throw UnimplementedError();
+  return lz4BlockDecompress(src, decompressedSize: decompressedSize);
 }
 
 Uint8List lz4FrameEncode(
