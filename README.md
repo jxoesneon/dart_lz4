@@ -6,7 +6,7 @@ Repository: https://github.com/jxoesneon/lz4
 
 ## Status
 
-This package is under active development. The public API in `lib/lz4.dart` is currently a stub and will throw `UnimplementedError()`.
+This package is under active development. The public API in `lib/dart_lz4.dart` is currently a stub and will throw `UnimplementedError()`.
 
 ## Goals
 
