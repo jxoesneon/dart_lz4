@@ -1,0 +1,62 @@
+name: Bug report
+description: Report a bug or regression.
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug.
+
+  - type: input
+    id: version
+    attributes:
+      label: Package version
+      description: Version of `lz4` you are using (if applicable).
+      placeholder: e.g. 0.0.1
+
+  - type: input
+    id: dart
+    attributes:
+      label: Dart SDK version
+      description: Output of `dart --version`.
+      placeholder: e.g. 3.10.4
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Dart VM
+        - Flutter
+        - Web (dart2js)
+        - Web (DDC)
+        - Other
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Include a minimal reproducible example.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / stack traces
+      render: text
