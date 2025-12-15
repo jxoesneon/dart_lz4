@@ -1,4 +1,4 @@
-import 'package:dart_lz4/lz4.dart';
+import 'package:dart_lz4/dart_lz4.dart';
 import 'package:test/test.dart';
 
 void main() {
