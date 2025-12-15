@@ -73,6 +73,36 @@ final class ByteWriter {
     _length += count;
   }
 
+  void copyMatch(int distance, int matchLength) {
+    if (matchLength < 0) {
+      throw RangeError.value(matchLength, 'matchLength');
+    }
+    if (distance <= 0 || distance > _length) {
+      throw const Lz4CorruptDataException('Invalid match distance');
+    }
+    if (matchLength == 0) {
+      return;
+    }
+
+    _ensureCapacity(matchLength);
+
+    final destStart = _length;
+    final end = destStart + matchLength;
+
+    if (distance == 1) {
+      final value = _buffer[destStart - 1];
+      _buffer.fillRange(destStart, end, value);
+      _length = end;
+      return;
+    }
+
+    for (var dest = destStart; dest < end; dest++) {
+      _buffer[dest] = _buffer[dest - distance];
+    }
+
+    _length = end;
+  }
+
   void _ensureCapacity(int additional) {
     if (additional < 0) {
       throw RangeError.value(additional, 'additional');
