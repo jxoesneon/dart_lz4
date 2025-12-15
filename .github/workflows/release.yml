@@ -66,9 +66,9 @@ jobs:
       - name: Publish disabled (set vars.PUB_PUBLISH=true to enable)
         if: ${{ vars.PUB_PUBLISH != 'true' }}
         run: |
-          echo "Skipping publish. To enable publishing set repository variable PUB_PUBLISH=true after Trusted Publisher is configured."
+          echo "Skipping publish. To enable publishing set repository variable PUB_PUBLISH=true after pub.dev 'Publishing from GitHub Actions' is enabled for jxoesneon/dart_lz4 with tag pattern v{{version}}."
 
-      - name: Publish to pub.dev (Trusted Publisher)
+      - name: Publish to pub.dev (GitHub Actions OIDC)
         if: ${{ vars.PUB_PUBLISH == 'true' }}
         run: dart pub publish --force
 
