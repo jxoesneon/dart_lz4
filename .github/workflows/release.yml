@@ -60,6 +60,15 @@ jobs:
       - name: Test
         run: dart test
 
+      - name: Dartdoc
+        run: dart doc
+
+      - name: Activate pana 0.23.3
+        run: dart pub global activate pana 0.23.3
+
+      - name: Pana
+        run: dart pub global run pana --no-warning .
+
       - name: Publish dry-run
         run: dart pub publish --dry-run
 
