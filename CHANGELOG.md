@@ -6,6 +6,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [0.0.3] - 2025-12-16
+
 - Implement LZ4 block encode/decode.
 - Implement LZ4 frame encode/decode and streaming frame decode.
 - Add xxHash32 implementation, including incremental (streaming) support.
