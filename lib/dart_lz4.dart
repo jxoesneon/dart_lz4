@@ -1,3 +1,14 @@
+/// Pure Dart LZ4 and LZ4HC APIs.
+///
+/// This library provides:
+/// - LZ4 block compression/decompression.
+/// - LZ4 frame encode/decode (including skippable frames).
+/// - A streaming frame decoder as a `StreamTransformer`.
+///
+/// All APIs are `Uint8List`-based and are intended to work on all Dart
+/// platforms, including Web.
+library dart_lz4;
+
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -8,11 +19,25 @@ import 'src/frame/lz4_frame_encoder.dart';
 import 'src/frame/lz4_frame_stream_decoder.dart';
 import 'src/hc/lz4_hc_block_encoder.dart';
 
+/// Compression level for [lz4Compress].
 enum Lz4CompressionLevel {
+  /// Fast compression (lower ratio, higher throughput).
   fast,
+
+  /// High-compression mode (higher ratio, lower throughput).
   hc,
 }
 
+/// Compresses [src] into an LZ4 *block*.
+///
+/// The returned bytes are in the raw LZ4 block format. To decode, you must know
+/// the decompressed size and pass it to [lz4Decompress].
+///
+/// The [level] selects between the fast and high-compression encoders.
+///
+/// When [level] is [Lz4CompressionLevel.fast], [acceleration] controls the
+/// speed/ratio tradeoff: higher values usually increase speed at the cost of
+/// compression ratio.
 Uint8List lz4Compress(
   Uint8List src, {
   Lz4CompressionLevel level = Lz4CompressionLevel.fast,
@@ -26,6 +51,12 @@ Uint8List lz4Compress(
   }
 }
 
+/// Decompresses an LZ4 *block* [src] into a new [Uint8List].
+///
+/// The [decompressedSize] must match the exact expected output size.
+///
+/// Throws an [Exception] if the input is malformed/truncated or if it attempts
+/// to write beyond the expected output size.
 Uint8List lz4Decompress(
   Uint8List src, {
   required int decompressedSize,
@@ -33,6 +64,13 @@ Uint8List lz4Decompress(
   return lz4BlockDecompress(src, decompressedSize: decompressedSize);
 }
 
+/// Encodes [src] as an LZ4 *frame*.
+///
+/// The output is a valid LZ4 frame (magic + header + one or more blocks + end
+/// mark). Blocks are compressed with the LZ4 block encoder and may be stored as
+/// uncompressed if that is smaller.
+///
+/// [acceleration] is forwarded to the underlying fast block compressor.
 Uint8List lz4FrameEncode(
   Uint8List src, {
   int acceleration = 1,
@@ -40,6 +78,10 @@ Uint8List lz4FrameEncode(
   return lz4FrameEncodeBytes(src, acceleration: acceleration);
 }
 
+/// Decodes one or more concatenated LZ4 frames from [src].
+///
+/// If [maxOutputBytes] is provided, decoding will stop with an [Exception] if
+/// the decompressed output would exceed that limit.
 Uint8List lz4FrameDecode(
   Uint8List src, {
   int? maxOutputBytes,
@@ -47,6 +89,12 @@ Uint8List lz4FrameDecode(
   return lz4FrameDecodeBytes(src, maxOutputBytes: maxOutputBytes);
 }
 
+/// Returns a `StreamTransformer` that decodes LZ4 frames from a byte stream.
+///
+/// This is useful when the frame arrives in chunks (e.g. network/file streams).
+///
+/// If [maxOutputBytes] is provided, decoding will stop with an [Exception] if
+/// the decompressed output would exceed that limit.
 StreamTransformer<List<int>, List<int>> lz4FrameDecoder({
   int? maxOutputBytes,
 }) {
