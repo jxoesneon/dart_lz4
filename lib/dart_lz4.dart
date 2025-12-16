@@ -3,7 +3,7 @@
 /// This library provides:
 /// - LZ4 block compression/decompression.
 /// - LZ4 frame encode/decode (including skippable frames).
-/// - A streaming frame decoder as a `StreamTransformer`.
+/// - Streaming frame encode/decode as `StreamTransformer`s.
 ///
 /// All APIs are `Uint8List`-based and are intended to work on all Dart
 /// platforms, including Web.
@@ -17,6 +17,7 @@ import 'src/block/lz4_block_encoder.dart';
 import 'src/frame/lz4_frame_decoder.dart';
 import 'src/frame/lz4_frame_encoder.dart';
 import 'src/frame/lz4_frame_stream_decoder.dart';
+import 'src/frame/lz4_frame_stream_encoder.dart';
 import 'src/hc/lz4_hc_block_encoder.dart';
 
 /// Compression level for [lz4Compress].
@@ -99,4 +100,16 @@ StreamTransformer<List<int>, List<int>> lz4FrameDecoder({
   int? maxOutputBytes,
 }) {
   return lz4FrameDecoderTransformer(maxOutputBytes: maxOutputBytes);
+}
+
+/// Returns a `StreamTransformer` that encodes bytes into a single LZ4 frame.
+///
+/// The transformer buffers up to the maximum frame block size (4MiB) and emits
+/// one or more encoded blocks, plus the final end mark.
+///
+/// [acceleration] is forwarded to the underlying fast block compressor.
+StreamTransformer<List<int>, List<int>> lz4FrameEncoder({
+  int acceleration = 1,
+}) {
+  return lz4FrameEncoderTransformer(acceleration: acceleration);
 }
