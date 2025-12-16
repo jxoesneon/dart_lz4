@@ -72,6 +72,9 @@ StreamTransformer<List<int>, List<int>> lz4FrameEncoderTransformerWithOptions({
       }
 
       totalIn += bytes.length;
+      if (contentSize != null && totalIn > contentSize) {
+        throw Lz4FormatException('contentSize does not match stream length');
+      }
       if (contentHasher != null) {
         contentHasher.update(bytes);
       }
