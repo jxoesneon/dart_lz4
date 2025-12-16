@@ -12,6 +12,12 @@ library dart_lz4;
 import 'dart:async';
 import 'dart:typed_data';
 
+export 'src/frame/lz4_frame_options.dart'
+    show Lz4FrameOptions, Lz4FrameBlockSize, Lz4FrameCompression;
+
+import 'src/frame/lz4_frame_options.dart'
+    show Lz4FrameOptions;
+
 import 'src/block/lz4_block_decoder.dart';
 import 'src/block/lz4_block_encoder.dart';
 import 'src/frame/lz4_frame_decoder.dart';
@@ -79,6 +85,14 @@ Uint8List lz4FrameEncode(
   return lz4FrameEncodeBytes(src, acceleration: acceleration);
 }
 
+/// Encodes [src] as an LZ4 *frame* using the provided [options].
+Uint8List lz4FrameEncodeWithOptions(
+  Uint8List src, {
+  required Lz4FrameOptions options,
+}) {
+  return lz4FrameEncodeBytesWithOptions(src, options: options);
+}
+
 /// Decodes one or more concatenated LZ4 frames from [src].
 ///
 /// If [maxOutputBytes] is provided, decoding will stop with an [Exception] if
@@ -112,4 +126,12 @@ StreamTransformer<List<int>, List<int>> lz4FrameEncoder({
   int acceleration = 1,
 }) {
   return lz4FrameEncoderTransformer(acceleration: acceleration);
+}
+
+/// Returns a `StreamTransformer` that encodes bytes into a single LZ4 frame
+/// using the provided [options].
+StreamTransformer<List<int>, List<int>> lz4FrameEncoderWithOptions({
+  required Lz4FrameOptions options,
+}) {
+  return lz4FrameEncoderTransformerWithOptions(options: options);
 }
