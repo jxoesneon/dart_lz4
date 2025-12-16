@@ -6,6 +6,13 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [0.0.4] - 2025-12-16
+
+- Add streaming LZ4 frame encode (`lz4FrameEncoder`) alongside streaming decode.
+- Add CI enforcement for `dart doc` and `pana 0.23.3`.
+- Improve public API Dartdoc coverage.
+- Update README and example for streaming frame encode usage.
+
 ## [0.0.3] - 2025-12-16
 
 - Implement LZ4 block encode/decode.
