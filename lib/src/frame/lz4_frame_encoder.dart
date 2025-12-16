@@ -27,11 +27,6 @@ Uint8List lz4FrameEncodeBytesWithOptions(
 }) {
   const version = 0x01;
 
-  if (!options.blockIndependence) {
-    throw const Lz4UnsupportedFeatureException(
-        'Dependent blocks are not supported for encoding');
-  }
-
   final flg = ((version & 0x03) << 6) |
       ((options.blockIndependence ? 1 : 0) << 5) |
       ((options.blockChecksum ? 1 : 0) << 4) |
@@ -64,6 +59,8 @@ Uint8List lz4FrameEncodeBytesWithOptions(
     contentHasher = Xxh32(seed: 0);
   }
 
+  const historyWindow = 64 * 1024;
+
   var offset = 0;
   while (offset < src.length) {
     var end = offset + blockMaxSize;
@@ -77,14 +74,29 @@ Uint8List lz4FrameEncodeBytesWithOptions(
       contentHasher.update(chunk);
     }
 
+    final Uint8List? dictionary;
+    if (!options.blockIndependence && offset != 0) {
+      final start = offset > historyWindow ? (offset - historyWindow) : 0;
+      dictionary = Uint8List.sublistView(src, start, offset);
+    } else {
+      dictionary = null;
+    }
+
     final Uint8List compressed;
     switch (options.compression) {
       case Lz4FrameCompression.fast:
-        compressed =
-            lz4BlockCompress(chunk, acceleration: options.acceleration);
+        compressed = lz4BlockCompress(
+          chunk,
+          dictionary: dictionary,
+          acceleration: options.acceleration,
+        );
         break;
       case Lz4FrameCompression.hc:
-        compressed = lz4HcBlockCompress(chunk, options: options.hcOptions);
+        compressed = lz4HcBlockCompress(
+          chunk,
+          dictionary: dictionary,
+          options: options.hcOptions,
+        );
         break;
     }
 
