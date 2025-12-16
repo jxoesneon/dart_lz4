@@ -12,7 +12,7 @@ Implemented:
 
 - LZ4 block encode/decode
 - LZ4 frame encode/decode
-- Streaming frame decode (`StreamTransformer`)
+- Streaming frame encode/decode (`StreamTransformer`)
 - LZ4HC block compression
 
 ## Goals
@@ -64,6 +64,14 @@ final decoded = lz4FrameDecode(frame);
 ```dart
 final decodedChunks = byteChunksStream.transform(
   lz4FrameDecoder(maxOutputBytes: 128 * 1024 * 1024),
+);
+```
+
+### Streaming frame encode
+
+```dart
+final encodedChunks = byteChunksStream.transform(
+  lz4FrameEncoder(),
 );
 ```
 
