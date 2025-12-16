@@ -4,6 +4,7 @@ import '../internal/byte_writer.dart';
 
 Uint8List lz4BlockCompress(
   Uint8List src, {
+  Uint8List? dictionary,
   int acceleration = 1,
 }) {
   if (acceleration < 1) {
@@ -15,11 +16,33 @@ Uint8List lz4BlockCompress(
     return Uint8List(0);
   }
 
+  const historyWindow = 64 * 1024;
+  const dictionaryWindow = historyWindow - 1;
+  final dictFull = dictionary;
+  final dict = (dictFull != null && dictFull.isNotEmpty)
+      ? (dictFull.length > dictionaryWindow
+          ? Uint8List.sublistView(
+              dictFull,
+              dictFull.length - dictionaryWindow,
+            )
+          : dictFull)
+      : null;
+  final dictLength = dict?.length ?? 0;
+
+  final Uint8List input;
+  if (dictLength == 0) {
+    input = src;
+  } else {
+    input = Uint8List(dictLength + inputLength);
+    input.setRange(0, dictLength, dict!);
+    input.setRange(dictLength, dictLength + inputLength, src);
+  }
+
   final writer = ByteWriter(initialCapacity: inputLength);
 
   const minMatch = 4;
   if (inputLength < minMatch) {
-    _writeLastLiterals(writer, src, 0, inputLength);
+    _writeLastLiterals(writer, input, dictLength, inputLength);
     return writer.toBytes();
   }
 
@@ -29,23 +52,32 @@ Uint8List lz4BlockCompress(
 
   final hashTable = List<int>.filled(hashSize, -1, growable: false);
 
-  var anchor = 0;
-  var i = 0;
+  if (dictLength != 0) {
+    for (var pos = 0; pos <= dictLength - minMatch; pos++) {
+      final seq = _readUint32LE(input, pos);
+      hashTable[_hash(seq, hashShift)] = pos;
+    }
+  }
 
-  while (i <= inputLength - minMatch) {
-    final seq = _readUint32LE(src, i);
+  var anchor = dictLength;
+  var i = dictLength;
+
+  final totalLength = input.length;
+
+  while (i <= totalLength - minMatch) {
+    final seq = _readUint32LE(input, i);
     final h = _hash(seq, hashShift);
 
     final ref = hashTable[h];
     hashTable[h] = i;
 
     final distance = i - ref;
-    if (ref >= 0 && distance <= 0xFFFF && _readUint32LE(src, ref) == seq) {
+    if (ref >= 0 && distance <= 0xFFFF && _readUint32LE(input, ref) == seq) {
       var matchStart = i;
       var refStart = ref;
 
       while (matchStart > anchor && refStart > 0) {
-        if (src[matchStart - 1] != src[refStart - 1]) {
+        if (input[matchStart - 1] != input[refStart - 1]) {
           break;
         }
         matchStart--;
@@ -55,14 +87,14 @@ Uint8List lz4BlockCompress(
       final literalLength = matchStart - anchor;
 
       var matchLength = minMatch;
-      while (matchStart + matchLength < inputLength &&
-          src[matchStart + matchLength] == src[refStart + matchLength]) {
+      while (matchStart + matchLength < totalLength &&
+          input[matchStart + matchLength] == input[refStart + matchLength]) {
         matchLength++;
       }
 
       _writeSequence(
         writer,
-        src,
+        input,
         anchor,
         literalLength,
         matchStart - refStart,
@@ -72,14 +104,14 @@ Uint8List lz4BlockCompress(
       i = matchStart + matchLength;
       anchor = i;
 
-      if (i > inputLength - minMatch) {
+      if (i > totalLength - minMatch) {
         break;
       }
 
       var j = i - matchLength + 1;
       final stop = i - minMatch;
       while (j <= stop) {
-        final s = _readUint32LE(src, j);
+        final s = _readUint32LE(input, j);
         hashTable[_hash(s, hashShift)] = j;
         j++;
       }
@@ -90,9 +122,9 @@ Uint8List lz4BlockCompress(
     i += 1 + ((i - anchor) >> acceleration);
   }
 
-  final lastLiterals = inputLength - anchor;
+  final lastLiterals = totalLength - anchor;
   if (lastLiterals != 0) {
-    _writeLastLiterals(writer, src, anchor, lastLiterals);
+    _writeLastLiterals(writer, input, anchor, lastLiterals);
   }
 
   return writer.toBytes();
