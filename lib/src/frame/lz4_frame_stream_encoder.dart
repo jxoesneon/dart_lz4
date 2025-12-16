@@ -23,11 +23,6 @@ StreamTransformer<List<int>, List<int>> lz4FrameEncoderTransformer({
 StreamTransformer<List<int>, List<int>> lz4FrameEncoderTransformerWithOptions({
   required Lz4FrameOptions options,
 }) {
-  if (!options.blockIndependence) {
-    throw const Lz4UnsupportedFeatureException(
-        'Dependent blocks are not supported for encoding');
-  }
-
   return StreamTransformer.fromBind((input) async* {
     const version = 0x01;
 
@@ -56,6 +51,35 @@ StreamTransformer<List<int>, List<int>> lz4FrameEncoderTransformerWithOptions({
 
     final buf = BytesBuilder(copy: false);
     var bufferedLen = 0;
+
+    const historyWindow = 64 * 1024;
+    final history = Uint8List(historyWindow);
+    var historyLen = 0;
+
+    void appendHistory(Uint8List bytes) {
+      if (bytes.length >= historyWindow) {
+        final start = bytes.length - historyWindow;
+        history.setRange(0, historyWindow, bytes, start);
+        historyLen = historyWindow;
+        return;
+      }
+
+      final required = historyLen + bytes.length;
+      if (required <= historyWindow) {
+        history.setRange(historyLen, required, bytes);
+        historyLen = required;
+        return;
+      }
+
+      final drop = required - historyWindow;
+      final keep = historyLen - drop;
+      for (var i = 0; i < keep; i++) {
+        history[i] = history[i + drop];
+      }
+      historyLen -= drop;
+      history.setRange(historyLen, historyLen + bytes.length, bytes);
+      historyLen += bytes.length;
+    }
 
     Uint8List takeBlock(Uint8List all, int size) {
       return Uint8List.sublistView(all, 0, size);
@@ -93,7 +117,15 @@ StreamTransformer<List<int>, List<int>> lz4FrameEncoderTransformerWithOptions({
         }
         bufferedLen = rest.length;
 
-        yield _encodeBlock(block, options: options);
+        final dictionary = (!options.blockIndependence && historyLen != 0)
+            ? Uint8List.sublistView(history, 0, historyLen)
+            : null;
+
+        yield _encodeBlock(block, options: options, dictionary: dictionary);
+
+        if (!options.blockIndependence) {
+          appendHistory(block);
+        }
       }
     }
 
@@ -101,7 +133,15 @@ StreamTransformer<List<int>, List<int>> lz4FrameEncoderTransformerWithOptions({
       final remaining = buf.takeBytes();
       bufferedLen = 0;
       if (remaining.isNotEmpty) {
-        yield _encodeBlock(remaining, options: options);
+        final dictionary = (!options.blockIndependence && historyLen != 0)
+            ? Uint8List.sublistView(history, 0, historyLen)
+            : null;
+
+        yield _encodeBlock(remaining, options: options, dictionary: dictionary);
+
+        if (!options.blockIndependence) {
+          appendHistory(remaining);
+        }
       }
     }
 
@@ -146,14 +186,23 @@ Uint8List _encodeHeader({
 Uint8List _encodeBlock(
   Uint8List chunk, {
   required Lz4FrameOptions options,
+  required Uint8List? dictionary,
 }) {
   final Uint8List compressed;
   switch (options.compression) {
     case Lz4FrameCompression.fast:
-      compressed = lz4BlockCompress(chunk, acceleration: options.acceleration);
+      compressed = lz4BlockCompress(
+        chunk,
+        dictionary: dictionary,
+        acceleration: options.acceleration,
+      );
       break;
     case Lz4FrameCompression.hc:
-      compressed = lz4HcBlockCompress(chunk, options: options.hcOptions);
+      compressed = lz4HcBlockCompress(
+        chunk,
+        dictionary: dictionary,
+        options: options.hcOptions,
+      );
       break;
   }
 
