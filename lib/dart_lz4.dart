@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'src/block/lz4_block_decoder.dart';
 import 'src/block/lz4_block_encoder.dart';
+import 'src/frame/lz4_frame_decoder.dart';
 import 'src/internal/lz4_exception.dart';
 
 enum Lz4CompressionLevel {
@@ -36,7 +37,8 @@ Uint8List lz4FrameEncode(
 }
 
 Uint8List lz4FrameDecode(
-  Uint8List src,
-) {
-  throw UnimplementedError();
+  Uint8List src, {
+  int? maxOutputBytes,
+}) {
+  return lz4FrameDecodeBytes(src, maxOutputBytes: maxOutputBytes);
 }
