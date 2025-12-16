@@ -9,6 +9,10 @@ tool/
 test/
 docs/
 
+# Dart tooling
+.dart_tool/
+pubspec.lock
+
 # IDE/editor
 .vscode/
 .idea/
