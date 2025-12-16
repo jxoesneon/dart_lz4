@@ -3,7 +3,8 @@
 This repository publishes the Dart package `dart_lz4` to pub.dev.
 
 Repository:
-- https://github.com/jxoesneon/dart_lz4
+
+- <https://github.com/jxoesneon/dart_lz4>
 
 ## Current release model
 
@@ -12,6 +13,7 @@ Repository:
 - Automation: `.github/workflows/release.yml`
 
 The release workflow validates that:
+
 - The pushed tag `vX.Y.Z` matches `pubspec.yaml` version `X.Y.Z`.
 - `dart format`, `dart analyze`, and `dart test` pass.
 - `dart pub publish --dry-run` passes.
@@ -20,7 +22,7 @@ The release workflow validates that:
 
 The first publish must be done manually.
 
-```
+```bash
 dart pub publish
 ```
 
@@ -28,15 +30,16 @@ dart pub publish
 
 1. Go to:
 
-- https://pub.dev/packages/dart_lz4/admin
+- <https://pub.dev/packages/dart_lz4/admin>
 
-2. In the **Automated publishing** section:
+1. In the **Automated publishing** section:
 
 - Enable **Publishing from GitHub Actions**
 - Repository: `jxoesneon/dart_lz4`
 - Tag pattern: `v{{version}}`
 
 Notes:
+
 - pub.dev only accepts automated publishing when the workflow is triggered by pushing a tag.
 
 ## Enable publishing in CI
@@ -48,6 +51,7 @@ After automated publishing is enabled on pub.dev, set the GitHub repository vari
 - `PUB_PUBLISH=true`
 
 GitHub UI path:
+
 - Repository Settings
 - Secrets and variables
 - Actions
