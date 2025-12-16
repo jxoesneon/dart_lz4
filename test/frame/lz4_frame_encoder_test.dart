@@ -2,7 +2,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:dart_lz4/dart_lz4.dart';
-import 'package:dart_lz4/src/internal/lz4_exception.dart';
+import 'package:dart_lz4/src/internal/lz4_exception.dart' as lz4_ex;
 import 'package:test/test.dart';
 
 void main() {
@@ -72,19 +72,44 @@ void main() {
         src,
         options: Lz4FrameOptions(contentSize: src.length + 1),
       ),
-      throwsA(isA<Lz4FormatException>()),
+      throwsA(isA<lz4_ex.Lz4FormatException>()),
     );
   });
 
-  test('lz4FrameEncodeWithOptions rejects dependent-block encoding', () {
-    final src = Uint8List.fromList('Hello'.codeUnits);
+  test('lz4FrameEncodeWithOptions supports dependent-block encoding', () {
+    const blockSize = 64 * 1024;
 
-    expect(
-      () => lz4FrameEncodeWithOptions(
-        src,
-        options: Lz4FrameOptions(blockIndependence: false),
+    final rng = Random(1);
+    final block = Uint8List(blockSize);
+    for (var i = 0; i < block.length; i++) {
+      block[i] = rng.nextInt(256);
+    }
+
+    final shifted = Uint8List(blockSize);
+    shifted.setRange(0, blockSize - 1, block, 1);
+    shifted[blockSize - 1] = block[blockSize - 1];
+
+    final src = Uint8List(blockSize * 2);
+    src.setRange(0, blockSize, block);
+    src.setRange(blockSize, blockSize * 2, shifted);
+
+    final independent = lz4FrameEncodeWithOptions(
+      src,
+      options: Lz4FrameOptions(
+        blockSize: Lz4FrameBlockSize.k64KB,
+        blockIndependence: true,
       ),
-      throwsA(isA<Lz4UnsupportedFeatureException>()),
     );
+
+    final dependent = lz4FrameEncodeWithOptions(
+      src,
+      options: Lz4FrameOptions(
+        blockSize: Lz4FrameBlockSize.k64KB,
+        blockIndependence: false,
+      ),
+    );
+
+    expect(lz4FrameDecode(dependent), src);
+    expect(dependent.length, lessThan(independent.length));
   });
 }
