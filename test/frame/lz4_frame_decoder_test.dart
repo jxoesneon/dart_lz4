@@ -22,21 +22,52 @@ class _FrameBlock {
 _Bytes _u32le(int v) =>
     <int>[v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >> 24) & 0xff];
 
+_Bytes _u64le(int v) {
+  return <int>[
+    v & 0xff,
+    (v >> 8) & 0xff,
+    (v >> 16) & 0xff,
+    (v >> 24) & 0xff,
+    0,
+    0,
+    0,
+    0,
+  ];
+}
+
 Uint8List _buildFrame({
   required int flg,
   required int bd,
   required List<_FrameBlock> blocks,
   bool addContentChecksum = false,
+  int? contentSize,
+  int? dictId,
 }) {
   const magic = 0x184D2204;
 
-  final descriptor = Uint8List.fromList([flg, bd]);
-  final hc = (xxh32(descriptor, seed: 0) >> 8) & 0xff;
+  final descriptorBytes = <int>[flg, bd];
+  final contentSizeFlag = ((flg >> 3) & 0x01) != 0;
+  final dictIdFlag = (flg & 0x01) != 0;
+  if (contentSizeFlag) {
+    descriptorBytes.addAll(_u64le(contentSize ?? 0));
+  }
+  if (dictIdFlag) {
+    descriptorBytes.addAll(_u32le(dictId ?? 0));
+  }
+  final hc = (xxh32(Uint8List.fromList(descriptorBytes), seed: 0) >> 8) & 0xff;
 
   final out = <int>[];
   out.addAll(_u32le(magic));
   out.add(flg);
   out.add(bd);
+
+  if (contentSizeFlag) {
+    out.addAll(_u64le(contentSize ?? 0));
+  }
+  if (dictIdFlag) {
+    out.addAll(_u32le(dictId ?? 0));
+  }
+
   out.add(hc);
 
   final decodedAll = <int>[];
@@ -229,5 +260,211 @@ void main() {
       () => lz4FrameDecode(frame, maxOutputBytes: 4),
       throwsA(isA<Lz4OutputLimitException>()),
     );
+  });
+
+  test('unsupported frame version throws', () {
+    const flg = 0x20;
+    const bd = 0x40;
+
+    final frame = _buildFrame(
+      flg: flg,
+      bd: bd,
+      blocks: [
+        _FrameBlock(
+          payload: Uint8List.fromList('A'.codeUnits),
+          decoded: Uint8List.fromList('A'.codeUnits),
+          isUncompressed: true,
+        ),
+      ],
+    );
+
+    expect(() => lz4FrameDecode(frame),
+        throwsA(isA<Lz4UnsupportedFeatureException>()));
+  });
+
+  test('reserved FLG bit set throws', () {
+    const flg = 0x62;
+    const bd = 0x40;
+
+    final frame = _buildFrame(
+      flg: flg,
+      bd: bd,
+      blocks: [
+        _FrameBlock(
+          payload: Uint8List.fromList('A'.codeUnits),
+          decoded: Uint8List.fromList('A'.codeUnits),
+          isUncompressed: true,
+        ),
+      ],
+    );
+
+    expect(() => lz4FrameDecode(frame), throwsA(isA<Lz4FormatException>()));
+  });
+
+  test('reserved BD bits set throws', () {
+    const flg = 0x60;
+    const bd = 0x41;
+
+    final frame = _buildFrame(
+      flg: flg,
+      bd: bd,
+      blocks: [
+        _FrameBlock(
+          payload: Uint8List.fromList('A'.codeUnits),
+          decoded: Uint8List.fromList('A'.codeUnits),
+          isUncompressed: true,
+        ),
+      ],
+    );
+
+    expect(() => lz4FrameDecode(frame), throwsA(isA<Lz4FormatException>()));
+  });
+
+  test('invalid block maximum size throws', () {
+    const flg = 0x60;
+    const bd = 0x30;
+
+    final frame = _buildFrame(
+      flg: flg,
+      bd: bd,
+      blocks: [
+        _FrameBlock(
+          payload: Uint8List.fromList('A'.codeUnits),
+          decoded: Uint8List.fromList('A'.codeUnits),
+          isUncompressed: true,
+        ),
+      ],
+    );
+
+    expect(() => lz4FrameDecode(frame), throwsA(isA<Lz4FormatException>()));
+  });
+
+  test('dictionary id flag throws unsupported', () {
+    const flg = 0x61;
+    const bd = 0x40;
+
+    final frame = _buildFrame(
+      flg: flg,
+      bd: bd,
+      dictId: 0x12345678,
+      blocks: [
+        _FrameBlock(
+          payload: Uint8List.fromList('A'.codeUnits),
+          decoded: Uint8List.fromList('A'.codeUnits),
+          isUncompressed: true,
+        ),
+      ],
+    );
+
+    expect(() => lz4FrameDecode(frame),
+        throwsA(isA<Lz4UnsupportedFeatureException>()));
+  });
+
+  test('content size mismatch throws', () {
+    const flg = 0x68;
+    const bd = 0x40;
+
+    final frame = _buildFrame(
+      flg: flg,
+      bd: bd,
+      contentSize: 6,
+      blocks: [
+        _FrameBlock(
+          payload: Uint8List.fromList('Hello'.codeUnits),
+          decoded: Uint8List.fromList('Hello'.codeUnits),
+          isUncompressed: true,
+        ),
+      ],
+    );
+
+    expect(
+        () => lz4FrameDecode(frame), throwsA(isA<Lz4CorruptDataException>()));
+  });
+
+  test('block checksum mismatch throws', () {
+    const flg = 0x70;
+    const bd = 0x40;
+
+    final frame = _buildFrame(
+      flg: flg,
+      bd: bd,
+      blocks: [
+        _FrameBlock(
+          payload: Uint8List.fromList('Hello'.codeUnits),
+          decoded: Uint8List.fromList('Hello'.codeUnits),
+          isUncompressed: true,
+        ),
+      ],
+    );
+
+    final bad = Uint8List.fromList(frame);
+    final checksumOffset = 7 + 4 + 5;
+    bad[checksumOffset] ^= 0xff;
+
+    expect(() => lz4FrameDecode(bad), throwsA(isA<Lz4CorruptDataException>()));
+  });
+
+  test('content checksum mismatch throws', () {
+    const flg = 0x64;
+    const bd = 0x40;
+
+    final frame = _buildFrame(
+      flg: flg,
+      bd: bd,
+      blocks: [
+        _FrameBlock(
+          payload: Uint8List.fromList('Hello'.codeUnits),
+          decoded: Uint8List.fromList('Hello'.codeUnits),
+          isUncompressed: true,
+        ),
+      ],
+      addContentChecksum: true,
+    );
+
+    final bad = Uint8List.fromList(frame);
+    bad[bad.length - 1] ^= 0xff;
+
+    expect(() => lz4FrameDecode(bad), throwsA(isA<Lz4CorruptDataException>()));
+  });
+
+  test('block size exceeds maximum throws', () {
+    const flg = 0x60;
+    const bd = 0x40;
+
+    final payload = Uint8List(65537);
+    final frame = _buildFrame(
+      flg: flg,
+      bd: bd,
+      blocks: [
+        _FrameBlock(
+          payload: payload,
+          decoded: payload,
+          isUncompressed: true,
+        ),
+      ],
+    );
+
+    expect(
+        () => lz4FrameDecode(frame), throwsA(isA<Lz4CorruptDataException>()));
+  });
+
+  test('truncated frame throws', () {
+    const flg = 0x60;
+    const bd = 0x40;
+
+    final frame = _buildFrame(
+      flg: flg,
+      bd: bd,
+      blocks: [
+        _FrameBlock(
+          payload: Uint8List.fromList('Hello'.codeUnits),
+          decoded: Uint8List.fromList('Hello'.codeUnits),
+          isUncompressed: true,
+        ),
+      ],
+    );
+
+    final truncated = Uint8List.sublistView(frame, 0, frame.length - 1);
+    expect(() => lz4FrameDecode(truncated), throwsA(isA<Lz4FormatException>()));
   });
 }
