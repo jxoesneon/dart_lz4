@@ -15,8 +15,7 @@ import 'dart:typed_data';
 export 'src/frame/lz4_frame_options.dart'
     show Lz4FrameOptions, Lz4FrameBlockSize, Lz4FrameCompression;
 
-import 'src/frame/lz4_frame_options.dart'
-    show Lz4FrameOptions;
+import 'src/frame/lz4_frame_options.dart' show Lz4FrameOptions;
 
 import 'src/block/lz4_block_decoder.dart';
 import 'src/block/lz4_block_encoder.dart';
