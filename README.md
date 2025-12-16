@@ -2,7 +2,7 @@
 
 Pure Dart implementation of LZ4 (block + frame) and LZ4HC, including streaming frame decode.
 
-Repository: https://github.com/jxoesneon/dart_lz4
+Repository: <https://github.com/jxoesneon/dart_lz4>
 
 ## Status
 
