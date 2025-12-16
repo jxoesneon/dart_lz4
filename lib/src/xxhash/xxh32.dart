@@ -34,11 +34,6 @@ int xxh32(Uint8List input, {int seed = 0}) {
     h32 =
         (_rotl32(v1, 1) + _rotl32(v2, 7) + _rotl32(v3, 12) + _rotl32(v4, 18)) &
             _mask32;
-
-    h32 = _mergeRound(h32, v1);
-    h32 = _mergeRound(h32, v2);
-    h32 = _mergeRound(h32, v3);
-    h32 = _mergeRound(h32, v4);
   } else {
     h32 = (seed + _prime32_5) & _mask32;
   }
@@ -71,12 +66,6 @@ int _round(int acc, int input) {
   acc = _rotl32(acc, 13);
   acc = (acc * _prime32_1) & _mask32;
   return acc;
-}
-
-int _mergeRound(int acc, int val) {
-  acc ^= _round(0, val);
-  acc = ((acc * _prime32_1) & _mask32) + _prime32_4;
-  return acc & _mask32;
 }
 
 int _rotl32(int x, int r) {
