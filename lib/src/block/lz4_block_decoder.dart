@@ -76,6 +76,48 @@ Uint8List lz4BlockDecompress(
   return writer.toBytes();
 }
 
+void lz4BlockDecompressInto(
+  Uint8List src,
+  ByteWriter writer,
+) {
+  final reader = ByteReader(src);
+
+  while (true) {
+    if (reader.isEOF) {
+      return;
+    }
+
+    final token = reader.readUint8();
+
+    var literalLength = token >> 4;
+    if (literalLength == 15) {
+      literalLength += _readExtendedLength(reader);
+    }
+
+    if (literalLength != 0) {
+      final literals = reader.readBytesView(literalLength);
+      writer.writeBytesView(literals, 0, literals.length);
+    }
+
+    if (reader.isEOF) {
+      return;
+    }
+
+    if (reader.remaining < 2) {
+      throw const Lz4FormatException('Unexpected end of input');
+    }
+
+    final distance = reader.readUint16LE();
+
+    var matchLength = (token & 0x0f) + 4;
+    if ((token & 0x0f) == 15) {
+      matchLength += _readExtendedLength(reader);
+    }
+
+    writer.copyMatch(distance, matchLength);
+  }
+}
+
 int _readExtendedLength(ByteReader reader) {
   var total = 0;
   while (true) {
