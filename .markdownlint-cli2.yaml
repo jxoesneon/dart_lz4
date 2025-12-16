@@ -1,0 +1,8 @@
+globs:
+  - "**/*.md"
+ignores:
+  - "doc/**"
+  - ".windsurf/**"
+config:
+  MD013:
+    line_length: 200
