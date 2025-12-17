@@ -10,6 +10,20 @@ const _independentFrameB64 =
 const _dependentFrameB64 =
     'BCJNGFxAABgBAAAAAADzKwEAAP8RAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gAP/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////IUBscHR4fbTlAxCIAAAAPIAD///////////////////////////////8AUBscHR4fb6vvZwAAAACC9YH3';
 
+const _smallIndependentDefaultB64 =
+    'BCJNGGRApy4AAAD/EQABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fIAD////LUBscHR4fAAAAAMVHkww=';
+
+const _smallIndependentNoFrameCrcB64 =
+    'BCJNGGBAgi4AAAD/EQABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fIAD////LUBscHR4fAAAAAA==';
+
+const _smallIndependentBlockChecksumB64 =
+    'BCJNGHRAvS4AAAD/EQABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fIAD////LUBscHR4fJtshrAAAAADFR5MM';
+
+const _smallIndependentContentSizeB64 =
+    'BCJNGGxAAAQAAAAAAABWLgAAAP8RAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gAP///8tQGxwdHh8AAAAAxUeTDA==';
+
+const _emptyFrameB64 = 'BCJNGGRApwAAAAAFXcwC';
+
 Uint8List _decodeB64(String s) => Uint8List.fromList(base64Decode(s));
 
 int _readUint32LE(Uint8List bytes, int offset) {
@@ -26,8 +40,7 @@ int _readUint64LEAsInt(Uint8List bytes, int offset) {
   return (hi << 32) | lo;
 }
 
-Uint8List _expectedPayload() {
-  const size = 70 * 1024;
+Uint8List _expectedPayload([int size = 70 * 1024]) {
   final out = Uint8List(size);
   for (var i = 0; i < out.length; i++) {
     out[i] = i & 0x1f;
@@ -103,5 +116,115 @@ void main() {
       contentSize: expected.length,
       blockMaxSizeId: 4,
     );
+  });
+
+  test('reference lz4 CLI small independent frame (default) decodes', () {
+    final frame = _decodeB64(_smallIndependentDefaultB64);
+    final decoded = lz4FrameDecode(frame);
+
+    final expected = _expectedPayload(1024);
+    expect(decoded, expected);
+
+    _expectHeader(
+      frame,
+      blockIndependence: true,
+      blockChecksum: false,
+      contentChecksum: true,
+      contentSize: null,
+      blockMaxSizeId: 4,
+    );
+  });
+
+  test('reference lz4 CLI small frame with content size decodes', () {
+    final frame = _decodeB64(_smallIndependentContentSizeB64);
+    final decoded = lz4FrameDecode(frame);
+
+    final expected = _expectedPayload(1024);
+    expect(decoded, expected);
+
+    _expectHeader(
+      frame,
+      blockIndependence: true,
+      blockChecksum: false,
+      contentChecksum: true,
+      contentSize: expected.length,
+      blockMaxSizeId: 4,
+    );
+  });
+
+  test('reference lz4 CLI small frame with no frame crc decodes', () {
+    final frame = _decodeB64(_smallIndependentNoFrameCrcB64);
+    final decoded = lz4FrameDecode(frame);
+
+    final expected = _expectedPayload(1024);
+    expect(decoded, expected);
+
+    _expectHeader(
+      frame,
+      blockIndependence: true,
+      blockChecksum: false,
+      contentChecksum: false,
+      contentSize: null,
+      blockMaxSizeId: 4,
+    );
+  });
+
+  test('reference lz4 CLI small frame with block checksum decodes', () {
+    final frame = _decodeB64(_smallIndependentBlockChecksumB64);
+    final decoded = lz4FrameDecode(frame);
+
+    final expected = _expectedPayload(1024);
+    expect(decoded, expected);
+
+    _expectHeader(
+      frame,
+      blockIndependence: true,
+      blockChecksum: true,
+      contentChecksum: true,
+      contentSize: null,
+      blockMaxSizeId: 4,
+    );
+  });
+
+  test('reference lz4 CLI empty frame decodes', () {
+    final frame = _decodeB64(_emptyFrameB64);
+    final decoded = lz4FrameDecode(frame);
+    expect(decoded, Uint8List(0));
+
+    _expectHeader(
+      frame,
+      blockIndependence: true,
+      blockChecksum: false,
+      contentChecksum: true,
+      contentSize: null,
+      blockMaxSizeId: 4,
+    );
+  });
+
+  test('skippable frame prefix is ignored', () {
+    final frame = _decodeB64(_smallIndependentDefaultB64);
+    const magic = 0x184D2A50;
+
+    final skippable = Uint8List.fromList([
+      magic & 0xff,
+      (magic >> 8) & 0xff,
+      (magic >> 16) & 0xff,
+      (magic >> 24) & 0xff,
+      4,
+      0,
+      0,
+      0,
+      0xDE,
+      0xAD,
+      0xBE,
+      0xEF,
+    ]);
+
+    final combined = Uint8List(skippable.length + frame.length);
+    combined.setRange(0, skippable.length, skippable);
+    combined.setRange(skippable.length, combined.length, frame);
+
+    final decoded = lz4FrameDecode(combined);
+    expect(decoded, _expectedPayload(1024));
   });
 }
