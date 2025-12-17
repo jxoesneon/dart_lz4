@@ -23,6 +23,11 @@ Implemented:
 - Streaming-friendly APIs with output limits
 - Compatibility with LZ4 frame format (current) and best-effort legacy frame decode
 
+## Limitations
+
+- Frames with the **Dictionary ID (`dictId`) flag** are not supported.
+- **Content sizes > 4GiB** are not supported.
+
 ## Roadmap (high level)
 
 - xxHash32 (streaming) with VM + dart2js parity
