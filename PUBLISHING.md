@@ -26,6 +26,27 @@ The first publish must be done manually.
 dart pub publish
 ```
 
+## Publisher / ownership (recommended)
+
+To reduce single-maintainer risk, publish under a **pub.dev publisher** (organization) instead of an individual account.
+
+1. Create (and verify) a pub.dev publisher for your organization/domain.
+   - Start at: <https://pub.dev/publishers>
+   - Follow pub.dev instructions to verify domain ownership (DNS TXT record).
+2. Transfer the package to the publisher:
+   - Go to: <https://pub.dev/packages/dart_lz4/admin>
+   - Transfer package ownership to the publisher.
+3. Add at least two publisher admins/owners (bus factor).
+4. Use strong account security for the Google accounts used on pub.dev (2FA, recovery options).
+
+## Access continuity
+
+Recommended practices to ensure releases can continue even if an individual is unavailable:
+
+- Ensure the package is owned by a publisher with multiple admins.
+- Ensure GitHub org/repo access is not single-person (at least two admins).
+- Keep GitHub Actions publishing gated (this repo uses `vars.PUB_PUBLISH`) and prefer an environment approval gate for actual publishing.
+
 ## Enable automated publishing from GitHub Actions (OIDC)
 
 1. Go to:
