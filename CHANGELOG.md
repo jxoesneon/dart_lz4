@@ -6,6 +6,13 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [0.0.5] - 2025-12-17
+
+- Add legacy LZ4 frame decode support (`lz4 -l` / magic `0x184C2102`) for sync and streaming decoders.
+- Add additional frame interop vectors and streaming boundary tests.
+- Add benchmark methodology docs and optional scheduled CI benchmark workflow.
+- Add security/supply-chain workflows and maintainer documentation updates.
+
 ## [0.0.4] - 2025-12-16
 
 - Add streaming LZ4 frame encode (`lz4FrameEncoder`) alongside streaming decode.
