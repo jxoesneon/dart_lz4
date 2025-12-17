@@ -9,6 +9,7 @@ import '../xxhash/xxh32.dart';
 const _lz4FrameMagic = 0x184D2204;
 const _lz4SkippableMagicBase = 0x184D2A50;
 const _lz4SkippableMagicMask = 0xFFFFFFF0;
+const _lz4LegacyFrameMagic = 0x184C2102;
 
 Uint8List lz4FrameDecodeBytes(
   Uint8List src, {
@@ -47,6 +48,12 @@ final class _Lz4FrameDecoder {
       return;
     }
 
+    if (magic == _lz4LegacyFrameMagic) {
+      final decoded = _decodeLegacyFrame();
+      _out.writeBytes(decoded);
+      return;
+    }
+
     if (magic != _lz4FrameMagic) {
       throw const Lz4FormatException('Invalid LZ4 frame magic number');
     }
@@ -61,6 +68,77 @@ final class _Lz4FrameDecoder {
     }
     final size = _reader.readUint32LE();
     _reader.skip(size);
+  }
+
+  Uint8List _decodeLegacyFrame() {
+    const legacyBlockMaxSize = 8 * 1024 * 1024;
+
+    final remaining =
+        _maxOutputBytes == null ? null : _maxOutputBytes - _out.length;
+    if (remaining != null && remaining < 0) {
+      throw const Lz4OutputLimitException('Output limit exceeded');
+    }
+
+    final frameOut = ByteWriter(maxLength: remaining);
+
+    while (true) {
+      if (_reader.remaining == 0) {
+        break;
+      }
+      if (_reader.remaining < 4) {
+        throw const Lz4FormatException('Unexpected end of input');
+      }
+
+      final next = _peekUint32LE();
+      if (_isLegacyBoundary(next)) {
+        break;
+      }
+
+      final blockCSize = _reader.readUint32LE();
+      if (blockCSize == 0) {
+        throw const Lz4CorruptDataException('Invalid legacy block size');
+      }
+
+      final blockData = _reader.readBytesView(blockCSize);
+      final tmp = ByteWriter(maxLength: legacyBlockMaxSize);
+      lz4BlockDecompressInto(blockData, tmp);
+      final decoded = tmp.bytesView();
+      frameOut.writeBytesView(decoded, 0, decoded.length);
+
+      if (_reader.remaining == 0) {
+        break;
+      }
+      if (_reader.remaining < 4) {
+        throw const Lz4FormatException('Unexpected end of input');
+      }
+
+      final after = _peekUint32LE();
+      final hasNextBlock = !_isLegacyBoundary(after);
+      if (hasNextBlock && decoded.length != legacyBlockMaxSize) {
+        throw const Lz4CorruptDataException('Legacy block is not full');
+      }
+    }
+
+    return frameOut.toBytes();
+  }
+
+  int _peekUint32LE() {
+    if (_reader.remaining < 4) {
+      throw const Lz4FormatException('Unexpected end of input');
+    }
+    final o = _reader.offset;
+    final b0 = _src[o];
+    final b1 = _src[o + 1];
+    final b2 = _src[o + 2];
+    final b3 = _src[o + 3];
+    return (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) & 0xffffffff;
+  }
+
+  bool _isLegacyBoundary(int magic) {
+    if (magic == _lz4FrameMagic || magic == _lz4LegacyFrameMagic) {
+      return true;
+    }
+    return (magic & _lz4SkippableMagicMask) == _lz4SkippableMagicBase;
   }
 
   Uint8List _decodeFrame() {
