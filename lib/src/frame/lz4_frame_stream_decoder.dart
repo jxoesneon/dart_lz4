@@ -9,6 +9,7 @@ import '../xxhash/xxh32.dart';
 const _lz4FrameMagic = 0x184D2204;
 const _lz4SkippableMagicBase = 0x184D2A50;
 const _lz4SkippableMagicMask = 0xFFFFFFF0;
+const _lz4LegacyFrameMagic = 0x184C2102;
 
 StreamTransformer<List<int>, List<int>> lz4FrameDecoderTransformer({
   int? maxOutputBytes,
@@ -48,11 +49,15 @@ enum _State {
   blockData,
   blockChecksum,
   contentChecksum,
+  legacyBlockSize,
+  legacyBlockData,
+  legacyAfterBlock,
 }
 
 final class _Lz4FrameStreamDecoder {
   final _ChunkBuffer _buf = _ChunkBuffer();
   final int? _maxOutputBytes;
+  bool _finished = false;
 
   _State _state = _State.magic;
 
@@ -84,6 +89,10 @@ final class _Lz4FrameStreamDecoder {
   int _frameProduced = 0;
   int _totalProduced = 0;
 
+  int _legacyBlockCSize = 0;
+  Uint8List? _legacyPending;
+  int _legacyPendingLen = 0;
+
   _Lz4FrameStreamDecoder({int? maxOutputBytes})
       : _maxOutputBytes = maxOutputBytes;
 
@@ -101,6 +110,11 @@ final class _Lz4FrameStreamDecoder {
           final magic = _buf.readUint32LE();
           if ((magic & _lz4SkippableMagicMask) == _lz4SkippableMagicBase) {
             _state = _State.skippableSize;
+            continue;
+          }
+          if (magic == _lz4LegacyFrameMagic) {
+            _resetFrameState();
+            _state = _State.legacyBlockSize;
             continue;
           }
           if (magic != _lz4FrameMagic) {
@@ -286,13 +300,103 @@ final class _Lz4FrameStreamDecoder {
           _finishFrame();
           _state = _State.magic;
           continue;
+
+        case _State.legacyBlockSize:
+          if (_legacyPending != null) {
+            _state = _State.legacyAfterBlock;
+            continue;
+          }
+
+          if (!_buf.has(4)) {
+            if (_finished) {
+              _state = _State.magic;
+              continue;
+            }
+            return null;
+          }
+
+          final next = _buf.peekUint32LE();
+          if (_isLegacyBoundary(next)) {
+            _state = _State.magic;
+            continue;
+          }
+
+          final cSize = _buf.readUint32LE();
+          if (cSize == 0) {
+            throw const Lz4CorruptDataException('Invalid legacy block size');
+          }
+          _legacyBlockCSize = cSize;
+          _state = _State.legacyBlockData;
+          continue;
+
+        case _State.legacyBlockData:
+          if (!_buf.has(_legacyBlockCSize)) {
+            return null;
+          }
+
+          const legacyBlockMaxSize = 8 * 1024 * 1024;
+          final blockData = _buf.readBytes(_legacyBlockCSize);
+          final tmp = ByteWriter(maxLength: legacyBlockMaxSize);
+          lz4BlockDecompressInto(blockData, tmp);
+          final produced = tmp.toBytes();
+
+          final maxOut = _maxOutputBytes;
+          if (maxOut != null && _totalProduced + produced.length > maxOut) {
+            throw const Lz4OutputLimitException('Output limit exceeded');
+          }
+          _totalProduced += produced.length;
+
+          _legacyPending = produced;
+          _legacyPendingLen = produced.length;
+          _state = _State.legacyAfterBlock;
+          continue;
+
+        case _State.legacyAfterBlock:
+          final pending = _legacyPending;
+          if (pending == null) {
+            _state = _State.legacyBlockSize;
+            continue;
+          }
+
+          if (!_buf.has(4)) {
+            if (!_finished) {
+              return null;
+            }
+            _legacyPending = null;
+            _legacyPendingLen = 0;
+            _state = _State.magic;
+            return pending;
+          }
+
+          final next = _buf.peekUint32LE();
+          if (_isLegacyBoundary(next)) {
+            _legacyPending = null;
+            _legacyPendingLen = 0;
+            _state = _State.magic;
+            return pending;
+          }
+
+          if (_legacyPendingLen != 8 * 1024 * 1024) {
+            throw const Lz4CorruptDataException('Legacy block is not full');
+          }
+
+          _legacyPending = null;
+          _legacyPendingLen = 0;
+          _state = _State.legacyBlockSize;
+          return pending;
       }
     }
   }
 
   void finish() {
+    _finished = true;
     if (_buf.length == 0 && _state == _State.magic) {
       return;
+    }
+    if (_state == _State.legacyAfterBlock && _legacyPending != null) {
+      if (_buf.length == 0) {
+        return;
+      }
     }
     throw const Lz4FormatException('Unexpected end of input');
   }
@@ -409,6 +513,10 @@ final class _Lz4FrameStreamDecoder {
 
     _contentHasher = null;
     _frameProduced = 0;
+
+    _legacyBlockCSize = 0;
+    _legacyPending = null;
+    _legacyPendingLen = 0;
   }
 }
 
@@ -458,6 +566,17 @@ final class _ChunkBuffer {
     final b2 = _buffer[_start + 2];
     final b3 = _buffer[_start + 3];
     _start += 4;
+    return (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) & 0xffffffff;
+  }
+
+  int peekUint32LE() {
+    if (!has(4)) {
+      throw const Lz4FormatException('Unexpected end of input');
+    }
+    final b0 = _buffer[_start];
+    final b1 = _buffer[_start + 1];
+    final b2 = _buffer[_start + 2];
+    final b3 = _buffer[_start + 3];
     return (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) & 0xffffffff;
   }
 
@@ -519,3 +638,10 @@ int _decodeBlockMaxSize(int id) {
 
 List<int> _u32le(int v) =>
     <int>[v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >> 24) & 0xff];
+
+bool _isLegacyBoundary(int magic) {
+  if (magic == _lz4FrameMagic || magic == _lz4LegacyFrameMagic) {
+    return true;
+  }
+  return (magic & _lz4SkippableMagicMask) == _lz4SkippableMagicBase;
+}
