@@ -1,6 +1,6 @@
 # dart_lz4
 
-Pure Dart implementation of LZ4 (block + frame) and LZ4HC, including streaming frame decode.
+Pure Dart implementation of LZ4 (block + frame) and LZ4HC, including streaming frame encode/decode.
 
 Repository: <https://github.com/jxoesneon/dart_lz4>
 
@@ -59,6 +59,26 @@ final frame = lz4FrameEncode(src);
 final decoded = lz4FrameDecode(frame);
 ```
 
+### Frame with options
+
+```dart
+final frame = lz4FrameEncodeWithOptions(
+  src,
+  options: Lz4FrameOptions(
+    blockSize: Lz4FrameBlockSize.k64KB,
+    blockChecksum: true,
+    contentChecksum: true,
+    contentSize: src.length,
+    compression: Lz4FrameCompression.fast,
+    acceleration: 1,
+  ),
+);
+final decoded = lz4FrameDecode(frame);
+```
+
+Dependent blocks are supported by setting `blockIndependence: false`. When enabled,
+blocks may reference up to 64KiB of history from prior blocks.
+
 ### Streaming frame decode
 
 ```dart
@@ -74,6 +94,33 @@ final encodedChunks = byteChunksStream.transform(
   lz4FrameEncoder(),
 );
 ```
+
+Streaming encoding also supports `Lz4FrameOptions`:
+
+```dart
+final encodedChunks = byteChunksStream.transform(
+  lz4FrameEncoderWithOptions(
+    options: Lz4FrameOptions(
+      blockSize: Lz4FrameBlockSize.k64KB,
+      blockIndependence: false,
+    ),
+  ),
+);
+```
+
+## Benchmarks
+
+Run:
+
+```sh
+dart run benchmark/lz4_benchmark.dart
+```
+
+It reports throughput (MiB/s) and ratio for:
+
+- **Block** compress/decompress (fast + hc)
+- **Frame (sync)** encode/decode (fast + hc)
+- **Frame (streaming)** encode/decode (fast + hc)
 
 ## License
 
