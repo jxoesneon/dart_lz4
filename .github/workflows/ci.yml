@@ -45,6 +45,9 @@ jobs:
       - name: Test
         run: dart test
 
+      - name: Test (Chrome)
+        run: dart test -p chrome test/web
+
       - name: Dartdoc
         run: dart doc
 
