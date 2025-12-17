@@ -28,6 +28,12 @@ Implemented:
 - Frames with the **Dictionary ID (`dictId`) flag** are not supported.
 - **Content sizes > 4GiB** are not supported.
 
+## Security / untrusted input
+
+- Always set a reasonable `maxOutputBytes` when decoding frames (`lz4FrameDecode` / `lz4FrameDecoder`) to mitigate decompression bombs.
+- Use `blockChecksum` and/or `contentChecksum` when encoding if you want corruption detection. These checksums are **not** cryptographic authentication.
+- For block decompression (`lz4Decompress`), `decompressedSize` must be known and trusted/validated.
+
 ## Roadmap (high level)
 
 - xxHash32 (streaming) with VM + dart2js parity
