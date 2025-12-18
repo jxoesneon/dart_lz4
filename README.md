@@ -25,8 +25,8 @@ Implemented:
 
 ## Limitations
 
-- Frames with the **Dictionary ID (`dictId`) flag** are not supported.
-- **Content sizes > 4GiB** are not supported.
+- **Content sizes > 4GiB**: Supported (via 64-bit headers).
+- **Dictionary ID**: Supported (via `dictionaryResolver`).
 
 ## Security / untrusted input
 
