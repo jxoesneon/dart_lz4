@@ -6,12 +6,18 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
-## [0.0.5] - 2025-12-17
+## [0.0.5] - 2025-12-18
 
 - Add legacy LZ4 frame decode support (`lz4 -l` / magic `0x184C2102`) for sync and streaming decoders.
 - Add additional frame interop vectors and streaming boundary tests.
 - Add benchmark methodology docs and optional scheduled CI benchmark workflow.
 - Add security/supply-chain workflows and maintainer documentation updates.
+- Fix xxHash32 parity on dart2js by enforcing strict 32-bit arithmetic and updating vectors.
+- Reduce allocations in LZ4 block and LZ4HC encoders by reusing scratch buffers.
+- Optimize streaming frame encoder history window shifting.
+- Make CLI interop tests VM-only so `dart test -p chrome` can run without `dart:io` failures.
+- Add benchmark baseline snapshot and a helper tool to compare benchmark output to baseline.
+- Run full test suite on Chrome in CI.
 
 ## [0.0.4] - 2025-12-16
 
