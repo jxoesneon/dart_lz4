@@ -24,6 +24,7 @@ export 'src/frame/lz4_frame_options.dart'
         Lz4FrameBlockSize,
         Lz4FrameCompression,
         Lz4DictionaryResolver;
+export 'src/hc/lz4_hc_options.dart' show Lz4HcOptions;
 
 import 'src/block/lz4_block_decoder.dart';
 import 'src/block/lz4_block_encoder.dart';
@@ -32,6 +33,7 @@ import 'src/frame/lz4_frame_encoder.dart';
 import 'src/frame/lz4_frame_stream_decoder.dart';
 import 'src/frame/lz4_frame_stream_encoder.dart';
 import 'src/hc/lz4_hc_block_encoder.dart';
+import 'src/hc/lz4_hc_options.dart';
 
 /// Compression level for [lz4Compress].
 enum Lz4CompressionLevel {
@@ -52,16 +54,20 @@ enum Lz4CompressionLevel {
 /// When [level] is [Lz4CompressionLevel.fast], [acceleration] controls the
 /// speed/ratio tradeoff: higher values usually increase speed at the cost of
 /// compression ratio.
+///
+/// When [level] is [Lz4CompressionLevel.hc], [hcOptions] can be provided to
+/// tune the compression (e.g. search depth).
 Uint8List lz4Compress(
   Uint8List src, {
   Lz4CompressionLevel level = Lz4CompressionLevel.fast,
   int acceleration = 1,
+  Lz4HcOptions? hcOptions,
 }) {
   switch (level) {
     case Lz4CompressionLevel.fast:
       return lz4BlockCompress(src, acceleration: acceleration);
     case Lz4CompressionLevel.hc:
-      return lz4HcBlockCompress(src);
+      return lz4HcBlockCompress(src, options: hcOptions);
   }
 }
 

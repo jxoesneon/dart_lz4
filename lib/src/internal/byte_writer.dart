@@ -21,6 +21,13 @@ final class ByteWriter {
 
   int get length => _length;
 
+  set length(int newLength) {
+    if (newLength < 0 || newLength > _buffer.length) {
+      throw RangeError.range(newLength, 0, _buffer.length, 'newLength');
+    }
+    _length = newLength;
+  }
+
   int get remainingCapacity => _buffer.length - _length;
 
   Uint8List bytesView() => Uint8List.sublistView(_buffer, 0, _length);
@@ -48,6 +55,16 @@ final class ByteWriter {
     _buffer[_length++] = (value >> 8) & 0xff;
     _buffer[_length++] = (value >> 16) & 0xff;
     _buffer[_length++] = (value >> 24) & 0xff;
+  }
+
+  void writeUint32LEAt(int index, int value) {
+    if (index < 0 || index + 4 > _length) {
+      throw RangeError.range(index, 0, _length - 4, 'index');
+    }
+    _buffer[index] = value & 0xff;
+    _buffer[index + 1] = (value >> 8) & 0xff;
+    _buffer[index + 2] = (value >> 16) & 0xff;
+    _buffer[index + 3] = (value >> 24) & 0xff;
   }
 
   void writeBytes(Uint8List bytes) {

@@ -3,7 +3,6 @@ import 'dart:typed_data';
 
 import 'package:dart_lz4/dart_lz4.dart';
 import 'package:dart_lz4/src/hc/lz4_hc_block_encoder.dart';
-import 'package:dart_lz4/src/hc/lz4_hc_options.dart';
 import 'package:test/test.dart';
 
 void main() {

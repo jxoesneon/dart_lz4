@@ -82,17 +82,24 @@ Uint8List lz4FrameEncodeBytesWithOptions(
       dictionary = null;
     }
 
-    final Uint8List compressed;
+    // Reserve space for block size (4 bytes)
+    final blockStart = writer.length;
+    writer.writeUint32LE(0); // placeholder
+
+    final payloadStart = writer.length;
+
     switch (options.compression) {
       case Lz4FrameCompression.fast:
-        compressed = lz4BlockCompress(
+        lz4BlockCompressToWriter(
+          writer,
           chunk,
           dictionary: dictionary,
           acceleration: options.acceleration,
         );
         break;
       case Lz4FrameCompression.hc:
-        compressed = lz4HcBlockCompress(
+        lz4HcBlockCompressToWriter(
+          writer,
           chunk,
           dictionary: dictionary,
           options: options.hcOptions,
@@ -100,16 +107,41 @@ Uint8List lz4FrameEncodeBytesWithOptions(
         break;
     }
 
-    final useCompressed = compressed.length < chunk.length;
-    final payload = useCompressed ? compressed : chunk;
+    final compressedLen = writer.length - payloadStart;
+    final useCompressed = compressedLen < chunk.length;
 
-    final isUncompressed = !useCompressed;
-    final blockSizeRaw = (isUncompressed ? 0x80000000 : 0) | payload.length;
-    writer.writeUint32LE(blockSizeRaw);
-    writer.writeBytes(payload);
+    if (useCompressed) {
+      // Update block size header
+      final blockSizeRaw = compressedLen; // Compressed flag bit 31 is 0
+      writer.writeUint32LEAt(blockStart, blockSizeRaw);
 
-    if (options.blockChecksum) {
-      writer.writeUint32LE(xxh32(payload, seed: 0));
+      if (options.blockChecksum) {
+        // We need to calculate checksum of the COMPRESSED payload
+        // Wait, LZ4 block checksum is of the compressed data?
+        // Spec says: "If the Block Checksum flag is set, a 4-byte Checksum is appended to the end of the Block."
+        // "The checksum is the result of xxHash32() on the raw (compressed) block data."
+        // Wait, standard LZ4 frame spec says:
+        // "Block Checksum: if this flag is set, each block is followed by a 4-bytes checksum of that block.
+        // The checksum is calculated on the raw (compressed) data."
+        // Let's verify.
+        // My previous implementation was: writer.writeUint32LE(xxh32(payload, seed: 0));
+        // where payload was compressed or chunk.
+        // So yes, checksum of what was written.
+        // We can access it via writer view.
+        final payloadView = Uint8List.sublistView(
+            writer.bytesView(), payloadStart, writer.length);
+        writer.writeUint32LE(xxh32(payloadView, seed: 0));
+      }
+    } else {
+      // Discard compressed data and write uncompressed
+      writer.length = blockStart; // Rewind
+      final blockSizeRaw = 0x80000000 | chunk.length;
+      writer.writeUint32LE(blockSizeRaw);
+      writer.writeBytes(chunk);
+
+      if (options.blockChecksum) {
+        writer.writeUint32LE(xxh32(chunk, seed: 0));
+      }
     }
 
     offset = end;

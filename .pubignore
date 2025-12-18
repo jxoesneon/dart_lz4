@@ -21,3 +21,6 @@ pubspec.lock
 # Local env
 .env
 .env.*
+
+# Test artifacts
+test_input.txt

@@ -40,11 +40,23 @@ Uint8List lz4HcBlockCompress(
   Uint8List? dictionary,
   Lz4HcOptions? options,
 }) {
+  final writer = ByteWriter(initialCapacity: src.length);
+  lz4HcBlockCompressToWriter(writer, src,
+      dictionary: dictionary, options: options);
+  return writer.toBytes();
+}
+
+void lz4HcBlockCompressToWriter(
+  ByteWriter writer,
+  Uint8List src, {
+  Uint8List? dictionary,
+  Lz4HcOptions? options,
+}) {
   final opt = options ?? Lz4HcOptions();
 
   final inputLength = src.length;
   if (inputLength == 0) {
-    return Uint8List(0);
+    return;
   }
 
   const historyWindow = 64 * 1024;
@@ -71,12 +83,10 @@ Uint8List lz4HcBlockCompress(
     input = Uint8List.sublistView(scratch, 0, totalLength);
   }
 
-  final writer = ByteWriter(initialCapacity: inputLength);
-
   const minMatch = 4;
   if (inputLength < minMatch) {
     _writeLastLiterals(writer, input, dictLength, inputLength);
-    return writer.toBytes();
+    return;
   }
 
   final hashTable = _hashTableScratch;
@@ -140,19 +150,14 @@ Uint8List lz4HcBlockCompress(
     if (bestLen >= minMatch) {
       var matchStart = i;
       var refStart = bestRef;
+      var actualLen = bestLen;
 
       while (matchStart > anchor &&
           refStart > 0 &&
           input[matchStart - 1] == input[refStart - 1]) {
         matchStart--;
         refStart--;
-        bestLen++;
-      }
-
-      var matchLen = bestLen;
-      while (matchStart + matchLen < totalLength &&
-          input[matchStart + matchLen] == input[refStart + matchLen]) {
-        matchLen++;
+        actualLen++;
       }
 
       final literalLength = matchStart - anchor;
@@ -162,17 +167,17 @@ Uint8List lz4HcBlockCompress(
         anchor,
         literalLength,
         matchStart - refStart,
-        matchLen,
+        actualLen,
       );
 
-      i = matchStart + matchLen;
+      i = matchStart + actualLen;
       anchor = i;
 
       if (i > totalLength - minMatch) {
         break;
       }
 
-      var j = i - matchLen + 1;
+      var j = i - actualLen + 1;
       final stop = i - minMatch;
       while (j <= stop) {
         insert(j);
@@ -189,8 +194,6 @@ Uint8List lz4HcBlockCompress(
   if (lastLiterals != 0) {
     _writeLastLiterals(writer, input, anchor, lastLiterals);
   }
-
-  return writer.toBytes();
 }
 
 int _readUint32LE(Uint8List bytes, int offset) {

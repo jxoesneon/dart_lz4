@@ -87,6 +87,58 @@ StreamTransformer<List<int>, List<int>> lz4FrameEncoderTransformerWithOptions({
       return Uint8List.sublistView(all, start, all.length);
     }
 
+    final blockWriter = ByteWriter(initialCapacity: blockMaxSize + 16);
+
+    Uint8List encodeBlock(Uint8List chunk, Uint8List? dictionary) {
+      blockWriter.clear();
+      // Reserve space for block size
+      blockWriter.writeUint32LE(0);
+      final payloadStart = 4;
+
+      switch (options.compression) {
+        case Lz4FrameCompression.fast:
+          lz4BlockCompressToWriter(
+            blockWriter,
+            chunk,
+            dictionary: dictionary,
+            acceleration: options.acceleration,
+          );
+          break;
+        case Lz4FrameCompression.hc:
+          lz4HcBlockCompressToWriter(
+            blockWriter,
+            chunk,
+            dictionary: dictionary,
+            options: options.hcOptions,
+          );
+          break;
+      }
+
+      final compressedLen = blockWriter.length - payloadStart;
+      final useCompressed = compressedLen < chunk.length;
+
+      if (useCompressed) {
+        // Patch block size
+        blockWriter.writeUint32LEAt(0, compressedLen);
+        if (options.blockChecksum) {
+          final payload = Uint8List.sublistView(
+              blockWriter.bytesView(), payloadStart, blockWriter.length);
+          blockWriter.writeUint32LE(xxh32(payload, seed: 0));
+        }
+        return blockWriter.toBytes();
+      } else {
+        // Reset and write uncompressed
+        blockWriter.clear();
+        final blockSizeRaw = 0x80000000 | chunk.length;
+        blockWriter.writeUint32LE(blockSizeRaw);
+        blockWriter.writeBytes(chunk);
+        if (options.blockChecksum) {
+          blockWriter.writeUint32LE(xxh32(chunk, seed: 0));
+        }
+        return blockWriter.toBytes();
+      }
+    }
+
     await for (final chunk in input) {
       final bytes = chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
       if (bytes.isEmpty) {
@@ -119,7 +171,7 @@ StreamTransformer<List<int>, List<int>> lz4FrameEncoderTransformerWithOptions({
             ? Uint8List.sublistView(history, 0, historyLen)
             : null;
 
-        yield _encodeBlock(block, options: options, dictionary: dictionary);
+        yield encodeBlock(block, dictionary);
 
         if (!options.blockIndependence) {
           appendHistory(block);
@@ -135,7 +187,7 @@ StreamTransformer<List<int>, List<int>> lz4FrameEncoderTransformerWithOptions({
             ? Uint8List.sublistView(history, 0, historyLen)
             : null;
 
-        yield _encodeBlock(remaining, options: options, dictionary: dictionary);
+        yield encodeBlock(remaining, dictionary);
 
         if (!options.blockIndependence) {
           appendHistory(remaining);
@@ -178,44 +230,5 @@ Uint8List _encodeHeader({
   final hc = (xxh32(descriptor, seed: 0) >> 8) & 0xff;
   writer.writeUint8(hc);
 
-  return writer.toBytes();
-}
-
-Uint8List _encodeBlock(
-  Uint8List chunk, {
-  required Lz4FrameOptions options,
-  required Uint8List? dictionary,
-}) {
-  final Uint8List compressed;
-  switch (options.compression) {
-    case Lz4FrameCompression.fast:
-      compressed = lz4BlockCompress(
-        chunk,
-        dictionary: dictionary,
-        acceleration: options.acceleration,
-      );
-      break;
-    case Lz4FrameCompression.hc:
-      compressed = lz4HcBlockCompress(
-        chunk,
-        dictionary: dictionary,
-        options: options.hcOptions,
-      );
-      break;
-  }
-
-  final useCompressed = compressed.length < chunk.length;
-  final payload = useCompressed ? compressed : chunk;
-
-  final blockSizeRaw = (useCompressed ? 0 : 0x80000000) | payload.length;
-
-  final writer = ByteWriter(
-      initialCapacity: payload.length + 8 + (options.blockChecksum ? 4 : 0));
-  writer.writeUint32LE(blockSizeRaw);
-  writer.writeBytes(payload);
-
-  if (options.blockChecksum) {
-    writer.writeUint32LE(xxh32(payload, seed: 0));
-  }
   return writer.toBytes();
 }

@@ -25,8 +25,8 @@ Implemented:
 
 ## Limitations
 
-- Frames with the **Dictionary ID (`dictId`) flag** are not supported.
-- **Content sizes > 4GiB** are not supported.
+- **Encoding** content sizes > 4GiB is not supported (decoding is supported).
+- **Encoding** with Dictionary ID is not supported (decoding is supported).
 
 ## Security / untrusted input
 
@@ -48,8 +48,8 @@ Tested against the reference `lz4` CLI (`lz4 v1.10.0`) via embedded decode vecto
 | Block checksum | Yes | Yes | |
 | Content checksum | Yes | Yes | |
 | Content size (<= 4GiB) | Yes | Yes | |
-| Content size (> 4GiB) | No | No | Decoding fails fast. |
-| Dictionary ID (`dictId`) | No | No | Not supported (fails fast). |
+| Content size (> 4GiB) | Yes | No | Decoding is supported. |
+| Dictionary ID (`dictId`) | Yes | No | Decoding is supported. |
 | Legacy `-l` format | Yes | No | Decode supports legacy frame magic `0x184C2102`. |
 
 ## Roadmap (high level)
@@ -78,7 +78,11 @@ final decoded = lz4Decompress(compressed, decompressedSize: src.length);
 ### LZ4HC
 
 ```dart
-final compressed = lz4Compress(src, level: Lz4CompressionLevel.hc);
+final compressed = lz4Compress(
+  src,
+  level: Lz4CompressionLevel.hc,
+  hcOptions: Lz4HcOptions(maxSearchDepth: 64), // Optional tuning
+);
 ```
 
 ### Frame

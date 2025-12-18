@@ -26,13 +26,25 @@ Uint8List lz4BlockCompress(
   Uint8List? dictionary,
   int acceleration = 1,
 }) {
+  final writer = ByteWriter(initialCapacity: src.length);
+  lz4BlockCompressToWriter(writer, src,
+      dictionary: dictionary, acceleration: acceleration);
+  return writer.toBytes();
+}
+
+void lz4BlockCompressToWriter(
+  ByteWriter writer,
+  Uint8List src, {
+  Uint8List? dictionary,
+  int acceleration = 1,
+}) {
   if (acceleration < 1) {
     throw RangeError.value(acceleration, 'acceleration');
   }
 
   final inputLength = src.length;
   if (inputLength == 0) {
-    return Uint8List(0);
+    return;
   }
 
   const historyWindow = 64 * 1024;
@@ -59,12 +71,10 @@ Uint8List lz4BlockCompress(
     input = Uint8List.sublistView(scratch, 0, totalLength);
   }
 
-  final writer = ByteWriter(initialCapacity: inputLength);
-
   const minMatch = 4;
   if (inputLength < minMatch) {
     _writeLastLiterals(writer, input, dictLength, inputLength);
-    return writer.toBytes();
+    return;
   }
 
   final hashTable = _hashTableScratch;
@@ -144,8 +154,6 @@ Uint8List lz4BlockCompress(
   if (lastLiterals != 0) {
     _writeLastLiterals(writer, input, anchor, lastLiterals);
   }
-
-  return writer.toBytes();
 }
 
 int _readUint32LE(Uint8List bytes, int offset) {
