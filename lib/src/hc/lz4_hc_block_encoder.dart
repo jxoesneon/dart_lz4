@@ -3,6 +3,38 @@ import 'dart:typed_data';
 import '../internal/byte_writer.dart';
 import 'lz4_hc_options.dart';
 
+const _hashLog = 16;
+const _hashSize = 1 << _hashLog;
+const _hashShift = 32 - _hashLog;
+
+final Int32List _hashTableScratch = Int32List(_hashSize);
+Int32List _chainScratch = Int32List(0);
+
+Uint8List _dictScratch = Uint8List(0);
+
+Uint8List _ensureDictScratch(int minLength) {
+  if (_dictScratch.length < minLength) {
+    var newLen = _dictScratch.isEmpty ? minLength : _dictScratch.length;
+    while (newLen < minLength) {
+      newLen *= 2;
+    }
+    _dictScratch = Uint8List(newLen);
+  }
+  return _dictScratch;
+}
+
+Int32List _ensureChainScratch(int minLength) {
+  if (_chainScratch.length < minLength) {
+    var newLen = _chainScratch.isEmpty ? minLength : _chainScratch.length;
+    while (newLen < minLength) {
+      newLen *= 2;
+    }
+    _chainScratch = Int32List(newLen);
+  }
+  _chainScratch.fillRange(0, minLength, -1);
+  return _chainScratch;
+}
+
 Uint8List lz4HcBlockCompress(
   Uint8List src, {
   Uint8List? dictionary,
@@ -32,9 +64,11 @@ Uint8List lz4HcBlockCompress(
   if (dictLength == 0) {
     input = src;
   } else {
-    input = Uint8List(dictLength + inputLength);
-    input.setRange(0, dictLength, dict!);
-    input.setRange(dictLength, dictLength + inputLength, src);
+    final totalLength = dictLength + inputLength;
+    final scratch = _ensureDictScratch(totalLength);
+    scratch.setRange(0, dictLength, dict!);
+    scratch.setRange(dictLength, totalLength, src);
+    input = Uint8List.sublistView(scratch, 0, totalLength);
   }
 
   final writer = ByteWriter(initialCapacity: inputLength);
@@ -45,16 +79,13 @@ Uint8List lz4HcBlockCompress(
     return writer.toBytes();
   }
 
-  const hashLog = 16;
-  const hashSize = 1 << hashLog;
-  const hashShift = 32 - hashLog;
-
-  final hashTable = List<int>.filled(hashSize, -1, growable: false);
-  final chain = List<int>.filled(input.length, -1, growable: false);
+  final hashTable = _hashTableScratch;
+  hashTable.fillRange(0, _hashSize, -1);
+  final chain = _ensureChainScratch(input.length);
 
   int insert(int pos) {
     final seq = _readUint32LE(input, pos);
-    final h = _hash(seq, hashShift);
+    final h = _hash(seq, _hashShift);
     final ref = hashTable[h];
     chain[pos] = ref;
     hashTable[h] = pos;
