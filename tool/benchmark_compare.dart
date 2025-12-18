@@ -204,8 +204,8 @@ void _printComparison({
           final delta = (cv as int) - (bv as int);
           deltaStr = '  (${_signedInt(delta)})';
         } else {
-          final baseD = (bv as num).toDouble();
-          final currD = (cv as num).toDouble();
+          final baseD = bv.toDouble();
+          final currD = cv.toDouble();
           final delta = currD - baseD;
           final pct = baseD == 0 ? null : (delta / baseD) * 100.0;
           deltaStr = pct == null
