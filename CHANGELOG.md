@@ -6,6 +6,14 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [0.0.7] - 2025-12-18
+
+- **Feature Parity**: Achieved feature parity with LZ4 frame specification and other language implementations.
+- Add `lz4FrameInfo` to inspect frame metadata (flags, content size, dictionary ID, etc.) without decoding.
+- Add support for LZ4 frames with Dictionary ID (`dictId`) via `dictionaryResolver` callback in `lz4FrameDecode` and `lz4FrameDecoder`.
+- Add support for 64-bit `contentSize` in frame headers (previously limited to 4GiB).
+- Add convenience helpers `lz4CompressWithSize` and `lz4DecompressWithSize` for simple size-prepended block compression.
+
 ## [0.0.6] - 2025-12-18
 
 - Fix xxHash32 parity on dart2js by enforcing strict 32-bit arithmetic and updating vectors.
