@@ -73,10 +73,8 @@ StreamTransformer<List<int>, List<int>> lz4FrameEncoderTransformerWithOptions({
 
       final drop = required - historyWindow;
       final keep = historyLen - drop;
-      for (var i = 0; i < keep; i++) {
-        history[i] = history[i + drop];
-      }
-      historyLen -= drop;
+      List.copyRange(history, 0, history, drop, drop + keep);
+      historyLen = keep;
       history.setRange(historyLen, historyLen + bytes.length, bytes);
       historyLen += bytes.length;
     }
