@@ -149,6 +149,16 @@ final class _Lz4FrameStreamDecoder {
           if (!_buf.has(2)) {
             return null;
           }
+
+          final flg = _buf.peekUint8At(0);
+
+          final contentSizeFlag = ((flg >> 3) & 0x01) != 0;
+          final dictIdFlag = (flg & 0x01) != 0;
+          final required = 2 + (contentSizeFlag ? 8 : 0) + (dictIdFlag ? 4 : 0);
+          if (!_buf.has(required)) {
+            return null;
+          }
+
           _flg = _buf.readUint8();
           _bd = _buf.readUint8();
           _descriptorBytes
@@ -180,9 +190,6 @@ final class _Lz4FrameStreamDecoder {
           _blockMaxSize = _decodeBlockMaxSize((_bd >> 4) & 0x07);
 
           if (_contentSizeFlag) {
-            if (!_buf.has(8)) {
-              return null;
-            }
             final low = _buf.readUint32LE();
             final high = _buf.readUint32LE();
             _descriptorBytes.addAll(_u32le(low));
@@ -195,9 +202,6 @@ final class _Lz4FrameStreamDecoder {
           }
 
           if (_dictIdFlag) {
-            if (!_buf.has(4)) {
-              return null;
-            }
             final id = _buf.readUint32LE();
             _descriptorBytes.addAll(_u32le(id));
             _dictId = id;
@@ -578,6 +582,17 @@ final class _ChunkBuffer {
     final b2 = _buffer[_start + 2];
     final b3 = _buffer[_start + 3];
     return (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) & 0xffffffff;
+  }
+
+  int peekUint8At(int offset) {
+    if (offset < 0) {
+      throw RangeError.value(offset, 'offset');
+    }
+    final needed = offset + 1;
+    if (!has(needed)) {
+      throw const Lz4FormatException('Unexpected end of input');
+    }
+    return _buffer[_start + offset];
   }
 
   Uint8List readBytes(int n) {

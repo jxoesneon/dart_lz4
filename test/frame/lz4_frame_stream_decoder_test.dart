@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:dart_lz4/dart_lz4.dart';
 import 'package:dart_lz4/src/internal/lz4_exception.dart';
+import 'package:dart_lz4/src/xxhash/xxh32.dart';
 import 'package:test/test.dart';
 
 Iterable<List<int>> _chunk(Uint8List bytes, List<int> sizes) sync* {
@@ -22,6 +23,27 @@ Uint8List _concat(List<List<int>> chunks) {
     builder.add(c);
   }
   return builder.takeBytes();
+}
+
+List<int> _u32le(int v) =>
+    <int>[v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >> 24) & 0xff];
+
+Uint8List _frameWithDictId({required int dictId}) {
+  const magic = 0x184D2204;
+  const flg = 0x61;
+  const bd = 0x40;
+
+  final descriptorBytes = <int>[flg, bd, ..._u32le(dictId)];
+  final hc = (xxh32(Uint8List.fromList(descriptorBytes), seed: 0) >> 8) & 0xff;
+
+  return Uint8List.fromList(<int>[
+    ..._u32le(magic),
+    flg,
+    bd,
+    ..._u32le(dictId),
+    hc,
+    ..._u32le(0),
+  ]);
 }
 
 void main() {
@@ -76,5 +98,24 @@ void main() {
     ).transform(lz4FrameDecoder()).toList();
 
     await expectLater(future, throwsA(isA<Lz4FormatException>()));
+  });
+
+  test('lz4FrameDecoder transformer rejects frames with dictId flag', () async {
+    final encoded = _frameWithDictId(dictId: 0x12345678);
+
+    final future = Stream<List<int>>.fromIterable(
+      _chunk(encoded, [1, 2, 1, 3, 1, 5]),
+    ).transform(lz4FrameDecoder()).toList();
+
+    await expectLater(
+      future,
+      throwsA(
+        isA<Lz4UnsupportedFeatureException>().having(
+          (e) => e.message,
+          'message',
+          'Dictionary ID is not supported',
+        ),
+      ),
+    );
   });
 }
