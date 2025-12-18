@@ -1,0 +1,59 @@
+# dart_lz4 benchmark baseline
+
+generated_utc: 2025-12-18T11:35:47Z
+git_head: a7c20f9f8e37c864d24b5fac9a7164aa74a93f0c
+dart_version: Dart SDK version: 3.10.4 (stable) (Tue Dec 9 00:01:55 2025 -0800) on "macos_x64"
+uname: Darwin Aggron.local 20.6.0 Darwin Kernel Version 20.6.0: Thu Jul  6 22:12:47 PDT 2023; root:xnu-7195.141.49.702.12~1/RELEASE_X86_64 x86_64
+sw_vers:
+ProductName:	macOS
+ProductVersion:	11.7.10
+BuildVersion:	20G1427
+sysctl:
+  hw.model: MacBookPro11,1
+  hw.ncpu: 4
+  hw.memsize: 17179869184
+  machdep.cpu.brand_string: Intel(R) Core(TM) i7-4558U CPU @ 2.80GHz
+
+---- benchmark output ----
+--- random 1MiB ---
+input: 1048576 bytes
+[fast] compressed: 1052690 bytes (ratio: 1.004)
+[fast] compress: 347.4 MiB/s
+[fast] decompress: 378.4 MiB/s
+[hc] compressed: 1052681 bytes (ratio: 1.004)
+[hc] compress: 1.9 MiB/s
+[hc] decompress: 305.1 MiB/s
+[frame-fast] compressed: 1048651 bytes (ratio: 1.000)
+[frame-fast] encode: 85.6 MiB/s
+[frame-fast] decode: 111.5 MiB/s
+[frame-hc] compressed: 1048651 bytes (ratio: 1.000)
+[frame-hc] encode: 18.7 MiB/s
+[frame-hc] decode: 115.8 MiB/s
+[stream-frame-fast] compressed: 1048651 bytes (ratio: 1.000)
+[stream-frame-fast] encode: 155.7 MiB/s
+[stream-frame-fast] decode: 236.8 MiB/s
+[stream-frame-hc] compressed: 1048651 bytes (ratio: 1.000)
+[stream-frame-hc] encode: 24.1 MiB/s
+[stream-frame-hc] decode: 227.6 MiB/s
+
+--- repeating 1MiB ---
+input: 1048576 bytes
+[fast] compressed: 4244 bytes (ratio: 0.004)
+[fast] compress: 305.8 MiB/s
+[fast] decompress: 223.1 MiB/s
+[hc] compressed: 4148 bytes (ratio: 0.004)
+[hc] compress: 144.3 MiB/s
+[hc] decompress: 234.3 MiB/s
+[frame-fast] compressed: 6299 bytes (ratio: 0.006)
+[frame-fast] encode: 114.7 MiB/s
+[frame-fast] decode: 95.9 MiB/s
+[frame-hc] compressed: 4763 bytes (ratio: 0.005)
+[frame-hc] encode: 163.5 MiB/s
+[frame-hc] decode: 89.9 MiB/s
+[stream-frame-fast] compressed: 6299 bytes (ratio: 0.006)
+[stream-frame-fast] encode: 148.8 MiB/s
+[stream-frame-fast] decode: 237.6 MiB/s
+[stream-frame-hc] compressed: 4763 bytes (ratio: 0.005)
+[stream-frame-hc] encode: 131.1 MiB/s
+[stream-frame-hc] decode: 266.4 MiB/s
+

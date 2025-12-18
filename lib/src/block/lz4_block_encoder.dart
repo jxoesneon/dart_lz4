@@ -2,6 +2,25 @@ import 'dart:typed_data';
 
 import '../internal/byte_writer.dart';
 
+const _hashLog = 16;
+const _hashSize = 1 << _hashLog;
+const _hashShift = 32 - _hashLog;
+
+final Int32List _hashTableScratch = Int32List(_hashSize);
+
+Uint8List _dictScratch = Uint8List(0);
+
+Uint8List _ensureDictScratch(int minLength) {
+  if (_dictScratch.length < minLength) {
+    var newLen = _dictScratch.isEmpty ? minLength : _dictScratch.length;
+    while (newLen < minLength) {
+      newLen *= 2;
+    }
+    _dictScratch = Uint8List(newLen);
+  }
+  return _dictScratch;
+}
+
 Uint8List lz4BlockCompress(
   Uint8List src, {
   Uint8List? dictionary,
@@ -33,9 +52,11 @@ Uint8List lz4BlockCompress(
   if (dictLength == 0) {
     input = src;
   } else {
-    input = Uint8List(dictLength + inputLength);
-    input.setRange(0, dictLength, dict!);
-    input.setRange(dictLength, dictLength + inputLength, src);
+    final totalLength = dictLength + inputLength;
+    final scratch = _ensureDictScratch(totalLength);
+    scratch.setRange(0, dictLength, dict!);
+    scratch.setRange(dictLength, totalLength, src);
+    input = Uint8List.sublistView(scratch, 0, totalLength);
   }
 
   final writer = ByteWriter(initialCapacity: inputLength);
@@ -46,16 +67,13 @@ Uint8List lz4BlockCompress(
     return writer.toBytes();
   }
 
-  const hashLog = 16;
-  const hashSize = 1 << hashLog;
-  const hashShift = 32 - hashLog;
-
-  final hashTable = List<int>.filled(hashSize, -1, growable: false);
+  final hashTable = _hashTableScratch;
+  hashTable.fillRange(0, _hashSize, -1);
 
   if (dictLength != 0) {
     for (var pos = 0; pos <= dictLength - minMatch; pos++) {
       final seq = _readUint32LE(input, pos);
-      hashTable[_hash(seq, hashShift)] = pos;
+      hashTable[_hash(seq, _hashShift)] = pos;
     }
   }
 
@@ -66,7 +84,7 @@ Uint8List lz4BlockCompress(
 
   while (i <= totalLength - minMatch) {
     final seq = _readUint32LE(input, i);
-    final h = _hash(seq, hashShift);
+    final h = _hash(seq, _hashShift);
 
     final ref = hashTable[h];
     hashTable[h] = i;
@@ -112,7 +130,7 @@ Uint8List lz4BlockCompress(
       final stop = i - minMatch;
       while (j <= stop) {
         final s = _readUint32LE(input, j);
-        hashTable[_hash(s, hashShift)] = j;
+        hashTable[_hash(s, _hashShift)] = j;
         j++;
       }
 

@@ -60,6 +60,9 @@ jobs:
       - name: Test
         run: dart test
 
+      - name: Test (Chrome)
+        run: dart test -p chrome
+
       - name: Dartdoc
         run: dart doc
 

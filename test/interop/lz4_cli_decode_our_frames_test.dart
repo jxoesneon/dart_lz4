@@ -1,3 +1,6 @@
+@TestOn('vm')
+library lz4_cli_decode_our_frames_test;
+
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
@@ -25,6 +28,58 @@ bool _isLz4AvailableSync() {
   } catch (_) {
     return false;
   }
+}
+
+bool _hasUncompressedBlock(Uint8List frame) {
+  int readU32LE(int offset) {
+    final b0 = frame[offset];
+    final b1 = frame[offset + 1];
+    final b2 = frame[offset + 2];
+    final b3 = frame[offset + 3];
+    return (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) & 0xffffffff;
+  }
+
+  if (frame.length < 7) {
+    return false;
+  }
+  const magic = 0x184D2204;
+  if (readU32LE(0) != magic) {
+    return false;
+  }
+
+  final flg = frame[4];
+  final blockChecksum = ((flg >> 4) & 0x01) != 0;
+  final contentSizeFlag = ((flg >> 3) & 0x01) != 0;
+  final dictIdFlag = (flg & 0x01) != 0;
+
+  var offset = 6;
+  if (contentSizeFlag) {
+    offset += 8;
+  }
+  if (dictIdFlag) {
+    offset += 4;
+  }
+  offset += 1;
+
+  while (offset + 4 <= frame.length) {
+    final blockSizeRaw = readU32LE(offset);
+    offset += 4;
+    if (blockSizeRaw == 0) {
+      break;
+    }
+
+    final isUncompressed = (blockSizeRaw & 0x80000000) != 0;
+    final blockSize = blockSizeRaw & 0x7fffffff;
+    offset += blockSize;
+    if (blockChecksum) {
+      offset += 4;
+    }
+    if (isUncompressed) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 String _lz4Command() {
@@ -72,7 +127,14 @@ Future<Uint8List> _decodeWithCli(Uint8List encoded) async {
 }
 
 void main() {
-  final cliAvailable = _isLz4AvailableSync();
+  Object skipReason =
+      'Skipping: reference lz4 CLI interop tests require dart:io';
+  if (!const bool.fromEnvironment('dart.library.html')) {
+    final cliAvailable = _isLz4AvailableSync();
+    skipReason = cliAvailable
+        ? false
+        : 'Skipping: reference lz4 CLI not available (set LZ4_CLI or install lz4)';
+  }
 
   test(
     'reference lz4 CLI decodes our independent-block frames',
@@ -95,9 +157,7 @@ void main() {
       final decoded = await _decodeWithCli(encoded);
       expect(decoded, src);
     },
-    skip: cliAvailable
-        ? false
-        : 'Skipping: reference lz4 CLI not available (set LZ4_CLI or install lz4)',
+    skip: skipReason,
   );
 
   test(
@@ -121,9 +181,7 @@ void main() {
       final decoded = await _decodeWithCli(encoded);
       expect(decoded, src);
     },
-    skip: cliAvailable
-        ? false
-        : 'Skipping: reference lz4 CLI not available (set LZ4_CLI or install lz4)',
+    skip: skipReason,
   );
 
   test(
@@ -146,8 +204,112 @@ void main() {
       final decoded = await _decodeWithCli(encoded);
       expect(decoded, src);
     },
-    skip: cliAvailable
-        ? false
-        : 'Skipping: reference lz4 CLI not available (set LZ4_CLI or install lz4)',
+    skip: skipReason,
+  );
+
+  test(
+    'reference lz4 CLI decodes our frames (options matrix)',
+    () async {
+      final cases = <Lz4FrameOptions Function(Uint8List src)>[
+        (src) => Lz4FrameOptions(
+              blockSize: Lz4FrameBlockSize.k64KB,
+              blockIndependence: true,
+              blockChecksum: false,
+              contentChecksum: false,
+              compression: Lz4FrameCompression.fast,
+            ),
+        (src) => Lz4FrameOptions(
+              blockSize: Lz4FrameBlockSize.k64KB,
+              blockIndependence: true,
+              blockChecksum: true,
+              contentChecksum: false,
+              contentSize: src.length,
+              compression: Lz4FrameCompression.fast,
+              acceleration: 2,
+            ),
+        (src) => Lz4FrameOptions(
+              blockSize: Lz4FrameBlockSize.k64KB,
+              blockIndependence: true,
+              blockChecksum: false,
+              contentChecksum: true,
+              compression: Lz4FrameCompression.fast,
+            ),
+        (src) => Lz4FrameOptions(
+              blockSize: Lz4FrameBlockSize.k256KB,
+              blockIndependence: false,
+              blockChecksum: false,
+              contentChecksum: true,
+              contentSize: src.length,
+              compression: Lz4FrameCompression.fast,
+            ),
+        (src) => Lz4FrameOptions(
+              blockSize: Lz4FrameBlockSize.k64KB,
+              blockIndependence: false,
+              blockChecksum: true,
+              contentChecksum: false,
+              compression: Lz4FrameCompression.fast,
+            ),
+        (src) => Lz4FrameOptions(
+              blockSize: Lz4FrameBlockSize.k64KB,
+              blockIndependence: true,
+              blockChecksum: true,
+              contentChecksum: true,
+              contentSize: src.length,
+              compression: Lz4FrameCompression.hc,
+            ),
+        (src) => Lz4FrameOptions(
+              blockSize: Lz4FrameBlockSize.k64KB,
+              blockIndependence: false,
+              blockChecksum: true,
+              contentChecksum: true,
+              contentSize: src.length,
+              compression: Lz4FrameCompression.hc,
+            ),
+      ];
+
+      for (var i = 0; i < cases.length; i++) {
+        final src = _payload(size: 128 * 1024 + 123 + i, seed: 100 + i);
+        final options = cases[i](src);
+
+        final encoded = lz4FrameEncodeWithOptions(src, options: options);
+        final decoded = await _decodeWithCli(encoded);
+
+        expect(decoded, src, reason: 'case $i');
+      }
+    },
+    skip: skipReason,
+  );
+
+  test(
+    'reference lz4 CLI decodes our frames containing at least one uncompressed block',
+    () async {
+      Uint8List? encoded;
+      Uint8List? src;
+      for (var seed = 1; seed <= 50; seed++) {
+        final candidate = _payload(size: 256 * 1024 + 7, seed: seed);
+        final frame = lz4FrameEncodeWithOptions(
+          candidate,
+          options: Lz4FrameOptions(
+            blockSize: Lz4FrameBlockSize.k64KB,
+            blockIndependence: true,
+            blockChecksum: true,
+            contentChecksum: true,
+            compression: Lz4FrameCompression.fast,
+          ),
+        );
+        if (_hasUncompressedBlock(frame)) {
+          encoded = frame;
+          src = candidate;
+          break;
+        }
+      }
+
+      expect(encoded, isNotNull,
+          reason: 'Failed to produce a frame with an uncompressed block');
+
+      final decoded = await _decodeWithCli(encoded!);
+      expect(decoded, src);
+    },
+    skip: skipReason,
   );
 }
