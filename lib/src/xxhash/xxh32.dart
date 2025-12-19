@@ -81,15 +81,40 @@ final class Xxh32 {
     }
 
     final limit = p + length - 16;
-    while (p <= limit) {
-      _v1 = _round(_v1, _readU32LE(input, p));
-      p += 4;
-      _v2 = _round(_v2, _readU32LE(input, p));
-      p += 4;
-      _v3 = _round(_v3, _readU32LE(input, p));
-      p += 4;
-      _v4 = _round(_v4, _readU32LE(input, p));
-      p += 4;
+
+    // Optimization: Use Uint32List view if aligned and Little Endian
+    if (Endian.host == Endian.little && (input.offsetInBytes + p) % 4 == 0) {
+      // We can use 32-bit reads directly
+      final u32 = input.buffer.asUint32List(input.offsetInBytes + p);
+      var idx = 0;
+      while (p <= limit) {
+        _v1 = _round(_v1, u32[idx]);
+        p += 4;
+        idx++;
+
+        _v2 = _round(_v2, u32[idx]);
+        p += 4;
+        idx++;
+
+        _v3 = _round(_v3, u32[idx]);
+        p += 4;
+        idx++;
+
+        _v4 = _round(_v4, u32[idx]);
+        p += 4;
+        idx++;
+      }
+    } else {
+      while (p <= limit) {
+        _v1 = _round(_v1, _readU32LE(input, p));
+        p += 4;
+        _v2 = _round(_v2, _readU32LE(input, p));
+        p += 4;
+        _v3 = _round(_v3, _readU32LE(input, p));
+        p += 4;
+        _v4 = _round(_v4, _readU32LE(input, p));
+        p += 4;
+      }
     }
 
     final remaining = (e - p);

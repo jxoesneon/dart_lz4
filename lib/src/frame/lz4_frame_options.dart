@@ -52,8 +52,14 @@ final class Lz4FrameOptions {
 
   /// Optional uncompressed content size to include in the frame header.
   ///
-  /// If set, it must fit within 32 bits.
+  /// If set, it must fit within 64 bits (unsigned).
   final int? contentSize;
+
+  /// Optional Dictionary ID to include in the frame header.
+  ///
+  /// If provided, this ID will be written to the header, and the encoder will
+  /// expect a dictionary to be provided during encoding.
+  final int? dictId;
 
   /// Which compressor to use for blocks.
   final Lz4FrameCompression compression;
@@ -75,6 +81,7 @@ final class Lz4FrameOptions {
     this.blockChecksum = false,
     this.contentChecksum = false,
     this.contentSize,
+    this.dictId,
     this.compression = Lz4FrameCompression.fast,
     this.acceleration = 1,
     this.hcOptions,
@@ -83,8 +90,12 @@ final class Lz4FrameOptions {
       throw RangeError.value(acceleration, 'acceleration');
     }
     final cs = contentSize;
-    if (cs != null && (cs < 0 || cs > 0xFFFFFFFF)) {
+    if (cs != null && cs < 0) {
       throw RangeError.value(cs, 'contentSize');
+    }
+    final did = dictId;
+    if (did != null && (did < 0 || did > 0xFFFFFFFF)) {
+      throw RangeError.value(did, 'dictId');
     }
   }
 }

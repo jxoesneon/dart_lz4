@@ -6,6 +6,12 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [0.0.9] - 2025-12-18
+
+- **Feature**: Added support for encoding LZ4 frames with a dictionary (`dictId`). This allows for significantly better compression ratios on small payloads when sharing a dictionary.
+- **Feature**: Added support for encoding LZ4 frames with 64-bit `contentSize` (previously limited to 4GiB).
+- **Performance**: Optimized `xxHash32` (streaming) to use aligned memory access for better throughput.
+
 ## [0.0.8] - 2025-12-18
 
 - **Performance**: Significant reduction in allocations for LZ4 frame encoding (sync and streaming) by reusing internal buffers.

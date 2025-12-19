@@ -12,16 +12,19 @@ const _lz4FrameMagic = 0x184D2204;
 
 StreamTransformer<List<int>, List<int>> lz4FrameEncoderTransformer({
   int acceleration = 1,
+  Uint8List? dictionary,
 }) {
   return lz4FrameEncoderTransformerWithOptions(
     options: Lz4FrameOptions(
       acceleration: acceleration,
     ),
+    dictionary: dictionary,
   );
 }
 
 StreamTransformer<List<int>, List<int>> lz4FrameEncoderTransformerWithOptions({
   required Lz4FrameOptions options,
+  Uint8List? dictionary,
 }) {
   return StreamTransformer.fromBind((input) async* {
     const version = 0x01;
@@ -30,7 +33,8 @@ StreamTransformer<List<int>, List<int>> lz4FrameEncoderTransformerWithOptions({
         ((options.blockIndependence ? 1 : 0) << 5) |
         ((options.blockChecksum ? 1 : 0) << 4) |
         ((options.contentSize != null ? 1 : 0) << 3) |
-        ((options.contentChecksum ? 1 : 0) << 2);
+        ((options.contentChecksum ? 1 : 0) << 2) |
+        ((options.dictId != null ? 1 : 0) << 0);
 
     final bd = (options.blockSize.bdId & 0x07) << 4;
     final blockMaxSize = options.blockSize.maxBytes;
@@ -39,6 +43,7 @@ StreamTransformer<List<int>, List<int>> lz4FrameEncoderTransformerWithOptions({
       flg: flg,
       bd: bd,
       contentSize: options.contentSize,
+      dictId: options.dictId,
     );
 
     final contentSize = options.contentSize;
@@ -55,6 +60,17 @@ StreamTransformer<List<int>, List<int>> lz4FrameEncoderTransformerWithOptions({
     const historyWindow = 64 * 1024;
     final history = Uint8List(historyWindow);
     var historyLen = 0;
+
+    if (dictionary != null && !options.blockIndependence) {
+      if (dictionary.length > historyWindow) {
+        final start = dictionary.length - historyWindow;
+        history.setRange(0, historyWindow, dictionary, start);
+        historyLen = historyWindow;
+      } else {
+        history.setRange(0, dictionary.length, dictionary);
+        historyLen = dictionary.length;
+      }
+    }
 
     void appendHistory(Uint8List bytes) {
       if (bytes.length >= historyWindow) {
@@ -167,11 +183,16 @@ StreamTransformer<List<int>, List<int>> lz4FrameEncoderTransformerWithOptions({
         }
         bufferedLen = rest.length;
 
-        final dictionary = (!options.blockIndependence && historyLen != 0)
-            ? Uint8List.sublistView(history, 0, historyLen)
-            : null;
+        final Uint8List? dictToUse;
+        if (options.blockIndependence) {
+          dictToUse = dictionary;
+        } else {
+          dictToUse = (historyLen != 0)
+              ? Uint8List.sublistView(history, 0, historyLen)
+              : null;
+        }
 
-        yield encodeBlock(block, dictionary);
+        yield encodeBlock(block, dictToUse);
 
         if (!options.blockIndependence) {
           appendHistory(block);
@@ -183,11 +204,16 @@ StreamTransformer<List<int>, List<int>> lz4FrameEncoderTransformerWithOptions({
       final remaining = buf.takeBytes();
       bufferedLen = 0;
       if (remaining.isNotEmpty) {
-        final dictionary = (!options.blockIndependence && historyLen != 0)
-            ? Uint8List.sublistView(history, 0, historyLen)
-            : null;
+        final Uint8List? dictToUse;
+        if (options.blockIndependence) {
+          dictToUse = dictionary;
+        } else {
+          dictToUse = (historyLen != 0)
+              ? Uint8List.sublistView(history, 0, historyLen)
+              : null;
+        }
 
-        yield encodeBlock(remaining, dictionary);
+        yield encodeBlock(remaining, dictToUse);
 
         if (!options.blockIndependence) {
           appendHistory(remaining);
@@ -213,6 +239,7 @@ Uint8List _encodeHeader({
   required int flg,
   required int bd,
   required int? contentSize,
+  required int? dictId,
 }) {
   final writer = ByteWriter(initialCapacity: 24);
   writer.writeUint32LE(_lz4FrameMagic);
@@ -220,8 +247,13 @@ Uint8List _encodeHeader({
   writer.writeUint8(bd);
 
   if (contentSize != null) {
-    writer.writeUint32LE(contentSize);
-    writer.writeUint32LE(0);
+    writer.writeUint32LE(contentSize & 0xFFFFFFFF);
+    // Use integer division instead of shift for JS compatibility
+    writer.writeUint32LE((contentSize ~/ 4294967296) & 0xFFFFFFFF);
+  }
+
+  if (dictId != null) {
+    writer.writeUint32LE(dictId);
   }
 
   final headerEnd = writer.length;

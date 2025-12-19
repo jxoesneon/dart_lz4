@@ -12,18 +12,21 @@ const _lz4FrameMagic = 0x184D2204;
 Uint8List lz4FrameEncodeBytes(
   Uint8List src, {
   int acceleration = 1,
+  Uint8List? dictionary,
 }) {
   return lz4FrameEncodeBytesWithOptions(
     src,
     options: Lz4FrameOptions(
       acceleration: acceleration,
     ),
+    dictionary: dictionary,
   );
 }
 
 Uint8List lz4FrameEncodeBytesWithOptions(
   Uint8List src, {
   required Lz4FrameOptions options,
+  Uint8List? dictionary,
 }) {
   const version = 0x01;
 
@@ -31,7 +34,8 @@ Uint8List lz4FrameEncodeBytesWithOptions(
       ((options.blockIndependence ? 1 : 0) << 5) |
       ((options.blockChecksum ? 1 : 0) << 4) |
       ((options.contentSize != null ? 1 : 0) << 3) |
-      ((options.contentChecksum ? 1 : 0) << 2);
+      ((options.contentChecksum ? 1 : 0) << 2) |
+      ((options.dictId != null ? 1 : 0) << 0);
 
   final bd = (options.blockSize.bdId & 0x07) << 4;
   final blockMaxSize = options.blockSize.maxBytes;
@@ -44,8 +48,14 @@ Uint8List lz4FrameEncodeBytesWithOptions(
 
   final contentSize = options.contentSize;
   if (contentSize != null) {
-    writer.writeUint32LE(contentSize);
-    writer.writeUint32LE(0);
+    writer.writeUint32LE(contentSize & 0xFFFFFFFF);
+    // Use integer division instead of shift for JS compatibility
+    writer.writeUint32LE((contentSize ~/ 4294967296) & 0xFFFFFFFF);
+  }
+
+  final dictId = options.dictId;
+  if (dictId != null) {
+    writer.writeUint32LE(dictId);
   }
 
   final headerEnd = writer.length;
@@ -74,12 +84,47 @@ Uint8List lz4FrameEncodeBytesWithOptions(
       contentHasher.update(chunk);
     }
 
-    final Uint8List? dictionary;
-    if (!options.blockIndependence && offset != 0) {
-      final start = offset > historyWindow ? (offset - historyWindow) : 0;
-      dictionary = Uint8List.sublistView(src, start, offset);
+    final Uint8List? blockDict;
+    if (options.blockIndependence) {
+      // If blocks are independent, we can only use the provided external dictionary
+      blockDict = dictionary;
     } else {
-      dictionary = null;
+      // Dependent blocks:
+      // If offset == 0, we use the external dictionary.
+      // If offset > 0, we use the previous data as dictionary.
+      // However, if we are near the beginning, we might need to combine
+      // part of the external dictionary with the start of src.
+      if (offset == 0) {
+        blockDict = dictionary;
+      } else if (offset >= historyWindow) {
+        // We have enough history in src itself.
+        blockDict = Uint8List.sublistView(src, offset - historyWindow, offset);
+      } else {
+        // Mixed history: some from external dict (if any), some from src.
+        // We need 64KB total history.
+        // Available from src: 'offset' bytes.
+        // Needed from dict: historyWindow - offset.
+        final dictLen = dictionary?.length ?? 0;
+        if (dictLen == 0) {
+          blockDict = Uint8List.sublistView(src, 0, offset);
+        } else {
+          final neededFromDict = historyWindow - offset;
+          final takeFromDict =
+              dictLen > neededFromDict ? neededFromDict : dictLen;
+          // We need to construct a combined dictionary buffer.
+          // This is expensive (allocation), but necessary for correct compression
+          // of the boundary region with dependent blocks + external dictionary.
+          final combined = Uint8List(takeFromDict + offset);
+          combined.setRange(
+              0,
+              takeFromDict,
+              Uint8List.sublistView(
+                  dictionary!, dictLen - takeFromDict, dictLen));
+          combined.setRange(takeFromDict, combined.length,
+              Uint8List.sublistView(src, 0, offset));
+          blockDict = combined;
+        }
+      }
     }
 
     // Reserve space for block size (4 bytes)
@@ -93,7 +138,7 @@ Uint8List lz4FrameEncodeBytesWithOptions(
         lz4BlockCompressToWriter(
           writer,
           chunk,
-          dictionary: dictionary,
+          dictionary: blockDict,
           acceleration: options.acceleration,
         );
         break;
@@ -101,7 +146,7 @@ Uint8List lz4FrameEncodeBytesWithOptions(
         lz4HcBlockCompressToWriter(
           writer,
           chunk,
-          dictionary: dictionary,
+          dictionary: blockDict,
           options: options.hcOptions,
         );
         break;
@@ -117,17 +162,6 @@ Uint8List lz4FrameEncodeBytesWithOptions(
 
       if (options.blockChecksum) {
         // We need to calculate checksum of the COMPRESSED payload
-        // Wait, LZ4 block checksum is of the compressed data?
-        // Spec says: "If the Block Checksum flag is set, a 4-byte Checksum is appended to the end of the Block."
-        // "The checksum is the result of xxHash32() on the raw (compressed) block data."
-        // Wait, standard LZ4 frame spec says:
-        // "Block Checksum: if this flag is set, each block is followed by a 4-bytes checksum of that block.
-        // The checksum is calculated on the raw (compressed) data."
-        // Let's verify.
-        // My previous implementation was: writer.writeUint32LE(xxh32(payload, seed: 0));
-        // where payload was compressed or chunk.
-        // So yes, checksum of what was written.
-        // We can access it via writer view.
         final payloadView = Uint8List.sublistView(
             writer.bytesView(), payloadStart, writer.length);
         writer.writeUint32LE(xxh32(payloadView, seed: 0));

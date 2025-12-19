@@ -91,19 +91,29 @@ Uint8List lz4Decompress(
 /// uncompressed if that is smaller.
 ///
 /// [acceleration] is forwarded to the underlying fast block compressor.
+///
+/// If [dictionary] is provided, it will be used to initialize the compression
+/// context.
 Uint8List lz4FrameEncode(
   Uint8List src, {
   int acceleration = 1,
+  Uint8List? dictionary,
 }) {
-  return lz4FrameEncodeBytes(src, acceleration: acceleration);
+  return lz4FrameEncodeBytes(src,
+      acceleration: acceleration, dictionary: dictionary);
 }
 
 /// Encodes [src] as an LZ4 *frame* using the provided [options].
+///
+/// If [dictionary] is provided, it will be used to initialize the compression
+/// context.
 Uint8List lz4FrameEncodeWithOptions(
   Uint8List src, {
   required Lz4FrameOptions options,
+  Uint8List? dictionary,
 }) {
-  return lz4FrameEncodeBytesWithOptions(src, options: options);
+  return lz4FrameEncodeBytesWithOptions(src,
+      options: options, dictionary: dictionary);
 }
 
 /// Decodes one or more concatenated LZ4 frames from [src].
@@ -150,16 +160,26 @@ StreamTransformer<List<int>, List<int>> lz4FrameDecoder({
 /// one or more encoded blocks, plus the final end mark.
 ///
 /// [acceleration] is forwarded to the underlying fast block compressor.
+///
+/// If [dictionary] is provided, it will be used to initialize the compression
+/// context.
 StreamTransformer<List<int>, List<int>> lz4FrameEncoder({
   int acceleration = 1,
+  Uint8List? dictionary,
 }) {
-  return lz4FrameEncoderTransformer(acceleration: acceleration);
+  return lz4FrameEncoderTransformer(
+      acceleration: acceleration, dictionary: dictionary);
 }
 
 /// Returns a `StreamTransformer` that encodes bytes into a single LZ4 frame
 /// using the provided [options].
+///
+/// If [dictionary] is provided, it will be used to initialize the compression
+/// context.
 StreamTransformer<List<int>, List<int>> lz4FrameEncoderWithOptions({
   required Lz4FrameOptions options,
+  Uint8List? dictionary,
 }) {
-  return lz4FrameEncoderTransformerWithOptions(options: options);
+  return lz4FrameEncoderTransformerWithOptions(
+      options: options, dictionary: dictionary);
 }
