@@ -83,7 +83,8 @@ void main() {
       );
 
       final encodedChunks = await stream.transform(transformer).toList();
-      final encoded = Uint8List.fromList(encodedChunks.expand((x) => x).toList());
+      final encoded =
+          Uint8List.fromList(encodedChunks.expand((x) => x).toList());
 
       final info = lz4FrameInfo(encoded);
       expect(info.dictId, dictId);
@@ -107,7 +108,8 @@ void main() {
       );
 
       final encodedChunks = await stream.transform(transformer).toList();
-      final encoded = Uint8List.fromList(encodedChunks.expand((x) => x).toList());
+      final encoded =
+          Uint8List.fromList(encodedChunks.expand((x) => x).toList());
 
       final info = lz4FrameInfo(encoded);
       expect(info.dictId, dictId);

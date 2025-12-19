@@ -26,7 +26,7 @@ void main() {
 
       // The first chunk should be the header
       final header = await queue.next;
-      
+
       // Parse header using lz4FrameInfo to verify
       final info = lz4FrameInfo(Uint8List.fromList(header));
       expect(info.contentSize, hugeSize);
