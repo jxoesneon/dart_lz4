@@ -207,3 +207,14 @@ StreamTransformer<List<int>, List<int>> lz4FrameEncoderWithOptions({
 Uint8List lz4SkippableEncode(Uint8List data, {int index = 0}) {
   return lz4SkippableFrameEncode(data, index: index);
 }
+
+/// Encodes [src] as a legacy LZ4 frame (magic `0x184C2102`).
+///
+/// Legacy frames use 8 MiB blocks without checksums or content size headers.
+/// This format is produced by `lz4 -l` and is rarely needed for new data.
+/// Prefer the modern frame format ([lz4FrameEncode]) for new applications.
+///
+/// [acceleration] controls the speed/ratio tradeoff (higher = faster, lower ratio).
+Uint8List lz4LegacyEncode(Uint8List src, {int acceleration = 1}) {
+  return lz4LegacyFrameEncode(src, acceleration: acceleration);
+}

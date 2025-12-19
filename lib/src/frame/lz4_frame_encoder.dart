@@ -9,6 +9,8 @@ import 'lz4_frame_options.dart';
 
 const _lz4FrameMagic = 0x184D2204;
 const _lz4SkippableMagicBase = 0x184D2A50;
+const _lz4LegacyFrameMagic = 0x184C2102;
+const _legacyBlockMaxSize = 8 * 1024 * 1024; // 8 MiB
 
 /// Encodes a skippable frame containing [data].
 ///
@@ -41,6 +43,49 @@ Uint8List lz4SkippableFrameEncode(Uint8List data, {int index = 0}) {
   result.setRange(8, result.length, data);
 
   return result;
+}
+
+/// Encodes [src] as a legacy LZ4 frame (magic `0x184C2102`).
+///
+/// Legacy frames use 8 MiB blocks without checksums or content size headers.
+/// This format is produced by `lz4 -l` and is rarely needed for new data.
+/// Prefer the modern frame format ([lz4FrameEncodeBytes]) for new applications.
+///
+/// [acceleration] controls the speed/ratio tradeoff (higher = faster, lower ratio).
+Uint8List lz4LegacyFrameEncode(Uint8List src, {int acceleration = 1}) {
+  final writer = ByteWriter(initialCapacity: src.length + 64);
+
+  // Write legacy magic
+  writer.writeUint32LE(_lz4LegacyFrameMagic);
+
+  var offset = 0;
+  while (offset < src.length) {
+    var end = offset + _legacyBlockMaxSize;
+    if (end > src.length) {
+      end = src.length;
+    }
+
+    final chunk = Uint8List.sublistView(src, offset, end);
+
+    // Compress block
+    final compressed = lz4BlockCompress(chunk, acceleration: acceleration);
+
+    // Legacy format always uses compressed data (no uncompressed fallback in original spec)
+    // However, we should still store uncompressed if compression doesn't help
+    if (compressed.length < chunk.length) {
+      writer.writeUint32LE(compressed.length);
+      writer.writeBytes(compressed);
+    } else {
+      // Store uncompressed - legacy decoders expect this to still decompress
+      // but since LZ4 block format handles literals, just write the compressed version
+      writer.writeUint32LE(compressed.length);
+      writer.writeBytes(compressed);
+    }
+
+    offset = end;
+  }
+
+  return writer.toBytes();
 }
 
 Uint8List lz4FrameEncodeBytes(

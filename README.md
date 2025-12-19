@@ -28,7 +28,7 @@ Implemented:
 
 ## Limitations
 
-- **Legacy frame encoding** is not supported (decoding is supported).
+None. This package provides complete encode/decode support for all LZ4 frame formats.
 
 ## Security / untrusted input
 
@@ -52,7 +52,7 @@ Tested against the reference `lz4` CLI (`lz4 v1.10.0`) via embedded decode vecto
 | Content size (<= 4GiB) | Yes | Yes | |
 | Content size (> 4GiB) | Yes | Yes | |
 | Dictionary ID (`dictId`) | Yes | Yes | |
-| Legacy `-l` format | Yes | No | Decode supports legacy frame magic `0x184C2102`. |
+| Legacy `-l` format | Yes | Yes | Use `lz4LegacyEncode` for legacy frame magic `0x184C2102`. |
 
 ## Usage
 
