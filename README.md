@@ -11,7 +11,7 @@ This package provides a **feature-complete** pure Dart implementation of the LZ4
 Implemented:
 
 - LZ4 block encode/decode
-- LZ4 frame encode/decode (including skippable frames)
+- LZ4 frame encode/decode (including skippable and legacy frames)
 - Streaming frame encode/decode (`StreamTransformer`)
 - LZ4HC block compression
 - Dictionary support (encode + decode)
@@ -145,6 +145,15 @@ final combined = Uint8List.fromList([...skippable, ...lz4FrameEncode(data)]);
 
 // Decoders will skip the metadata and decode only the payload
 final decoded = lz4FrameDecode(combined);
+```
+
+### Legacy Frames
+
+Encode data using the legacy LZ4 format (compatible with `lz4 -l`):
+
+```dart
+final frame = lz4LegacyEncode(src);
+final decoded = lz4FrameDecode(frame);
 ```
 
 ### Sized Blocks
