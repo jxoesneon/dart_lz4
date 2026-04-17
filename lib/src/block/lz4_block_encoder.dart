@@ -6,21 +6,6 @@ const _hashLog = 16;
 const _hashSize = 1 << _hashLog;
 const _hashShift = 32 - _hashLog;
 
-final Int32List _hashTableScratch = Int32List(_hashSize);
-
-Uint8List _dictScratch = Uint8List(0);
-
-Uint8List _ensureDictScratch(int minLength) {
-  if (_dictScratch.length < minLength) {
-    var newLen = _dictScratch.isEmpty ? minLength : _dictScratch.length;
-    while (newLen < minLength) {
-      newLen *= 2;
-    }
-    _dictScratch = Uint8List(newLen);
-  }
-  return _dictScratch;
-}
-
 Uint8List lz4BlockCompress(
   Uint8List src, {
   Uint8List? dictionary,
@@ -65,10 +50,10 @@ void lz4BlockCompressToWriter(
     input = src;
   } else {
     final totalLength = dictLength + inputLength;
-    final scratch = _ensureDictScratch(totalLength);
+    final scratch = Uint8List(totalLength);
     scratch.setRange(0, dictLength, dict!);
     scratch.setRange(dictLength, totalLength, src);
-    input = Uint8List.sublistView(scratch, 0, totalLength);
+    input = scratch;
   }
 
   const minMatch = 4;
@@ -77,7 +62,7 @@ void lz4BlockCompressToWriter(
     return;
   }
 
-  final hashTable = _hashTableScratch;
+  final hashTable = Int32List(_hashSize);
   hashTable.fillRange(0, _hashSize, -1);
 
   if (dictLength != 0) {
@@ -92,7 +77,9 @@ void lz4BlockCompressToWriter(
 
   final totalLength = input.length;
 
-  while (i <= totalLength - minMatch) {
+  final searchLimit = totalLength - 12;
+
+  while (i <= searchLimit) {
     final seq = _readUint32LE(input, i);
     final h = _hash(seq, _hashShift);
 
@@ -113,9 +100,9 @@ void lz4BlockCompressToWriter(
       }
 
       final literalLength = matchStart - anchor;
-
       var matchLength = minMatch;
-      while (matchStart + matchLength < totalLength &&
+
+      while (matchStart + matchLength < totalLength - 5 &&
           input[matchStart + matchLength] == input[refStart + matchLength]) {
         matchLength++;
       }

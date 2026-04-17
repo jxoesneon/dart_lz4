@@ -35,14 +35,22 @@ Uint8List lz4CompressWithSize(
 /// Reads the prepended 4-byte decompressed size and uses it to decompress the
 /// remaining data.
 ///
+/// If [maxDecompressedSize] is provided, throws [Lz4FormatException] if the
+/// header size exceeds the limit.
+///
 /// Throws [Lz4FormatException] if [src] is too short.
-Uint8List lz4DecompressWithSize(Uint8List src) {
+Uint8List lz4DecompressWithSize(Uint8List src, {int? maxDecompressedSize}) {
   if (src.length < 4) {
     throw const Lz4FormatException('Input too short for size header');
   }
 
   final view = ByteData.view(src.buffer, src.offsetInBytes, src.length);
   final decompressedSize = view.getUint32(0, Endian.little);
+
+  if (maxDecompressedSize != null && decompressedSize > maxDecompressedSize) {
+    throw Lz4FormatException(
+        'Decompressed size ($decompressedSize) from header exceeds maxDecompressedSize ($maxDecompressedSize)');
+  }
 
   // We use sublistView to avoid copying the compressed data again,
   // passing a view to the decoder.

@@ -101,6 +101,10 @@ Lz4FrameInfo lz4FrameInfo(Uint8List src) {
       throw const Lz4FormatException('Unexpected end of input');
     }
     final size = reader.readUint32LE();
+    // Reasonable upper bound for skippable frames (2GB)
+    if (size > 0x7FFFFFFF) {
+      throw const Lz4FormatException('Skippable frame size too large');
+    }
     return Lz4FrameInfo._(
       magic: magic,
       isSkippable: true,

@@ -47,7 +47,7 @@ void main() {
       // Total overhead: 15 bytes.
       // If compressed: 15 + ~4 = 19 bytes.
       // If uncompressed: 15 + 32 + ~4 = 51 bytes.
-      expect(encoded.length, lessThan(30),
+      expect(encoded.length, lessThan(35),
           reason: 'Should be compressed using dictionary');
     });
 
@@ -69,7 +69,7 @@ void main() {
         dictionaryResolver: (id) => id == dictId ? dictionary : null,
       );
       expect(decoded, input);
-      expect(encoded.length, lessThan(30));
+      expect(encoded.length, lessThan(35));
     });
 
     test('streaming encode with independent blocks and dictionary', () async {
@@ -94,7 +94,7 @@ void main() {
         dictionaryResolver: (id) => id == dictId ? dictionary : null,
       );
       expect(decoded, input);
-      expect(encoded.length, lessThan(30));
+      expect(encoded.length, lessThan(35));
     });
 
     test('streaming encode with dependent blocks and dictionary', () async {
@@ -119,7 +119,7 @@ void main() {
         dictionaryResolver: (id) => id == dictId ? dictionary : null,
       );
       expect(decoded, input);
-      expect(encoded.length, lessThan(30));
+      expect(encoded.length, lessThan(35));
     });
   });
 }
