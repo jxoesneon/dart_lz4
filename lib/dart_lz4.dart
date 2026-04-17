@@ -75,13 +75,21 @@ Uint8List lz4Compress(
 ///
 /// The [decompressedSize] must match the exact expected output size.
 ///
+/// If [maxDecompressedSize] is provided, throws [Lz4FormatException] if
+/// [decompressedSize] exceeds the limit.
+///
 /// Throws an [Exception] if the input is malformed/truncated or if it attempts
 /// to write beyond the expected output size.
 Uint8List lz4Decompress(
   Uint8List src, {
   required int decompressedSize,
+  int? maxDecompressedSize,
 }) {
-  return lz4BlockDecompress(src, decompressedSize: decompressedSize);
+  return lz4BlockDecompress(
+    src,
+    decompressedSize: decompressedSize,
+    maxDecompressedSize: maxDecompressedSize,
+  );
 }
 
 /// Encodes [src] as an LZ4 *frame*.

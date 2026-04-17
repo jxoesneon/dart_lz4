@@ -52,7 +52,6 @@ enum _State {
   headerChecksum,
   blockSize,
   blockData,
-  blockChecksum,
   contentChecksum,
   legacyBlockSize,
   legacyBlockData,
@@ -98,7 +97,6 @@ final class _Lz4FrameStreamDecoder {
 
   int _legacyBlockCSize = 0;
   Uint8List? _legacyPending;
-  int _legacyPendingLen = 0;
 
   _Lz4FrameStreamDecoder({
     int? maxOutputBytes,
@@ -138,7 +136,12 @@ final class _Lz4FrameStreamDecoder {
           if (!_buf.has(4)) {
             return null;
           }
-          _skippableRemaining = _buf.readUint32LE();
+          final size = _buf.readUint32LE();
+          // Reasonable upper bound for skippable frames (2GB)
+          if (size > 0x7FFFFFFF) {
+            throw const Lz4FormatException('Skippable frame size too large');
+          }
+          _skippableRemaining = size;
           _state = _State.skippableSkip;
           continue;
 
@@ -205,11 +208,26 @@ final class _Lz4FrameStreamDecoder {
             _descriptorBytes.addAll(_u32le(low));
             _descriptorBytes.addAll(_u32le(high));
 
+            // Check for potential precision loss on Web (JS 53-bit integers).
+            // 2^53 - 1 = 9007199254740991
+            if (high > 0x1FFFFF || (high == 0x200000 && low > 0)) {
+              if (identical(0, 0.0)) {
+                throw const Lz4FormatException(
+                    '64-bit content size overflow/Web precision loss');
+              }
+            }
+
             final val = (high * 4294967296) + low;
             if (val < 0) {
-              throw const Lz4UnsupportedFeatureException(
-                  'Content size exceeds supported integer range');
+              throw const Lz4FormatException(
+                  '64-bit content size overflow/Web precision loss');
             }
+
+            if (_maxOutputBytes != null && val > _maxOutputBytes) {
+              throw const Lz4OutputLimitException(
+                  'Content size exceeds output limit');
+            }
+
             _contentSize = val;
           }
 
@@ -278,31 +296,18 @@ final class _Lz4FrameStreamDecoder {
           continue;
 
         case _State.blockData:
-          if (!_buf.has(_currentBlockSize)) {
+          final required = _currentBlockSize + (_blockChecksum ? 4 : 0);
+          if (!_buf.has(required)) {
             return null;
           }
           _currentBlockData = _buf.readBytes(_currentBlockSize);
 
           if (_blockChecksum) {
-            _state = _State.blockChecksum;
-            continue;
-          }
-
-          final out = _decodeCurrentBlockAndUpdateState();
-          if (out.isNotEmpty) {
-            return out;
-          }
-          continue;
-
-        case _State.blockChecksum:
-          if (!_buf.has(4)) {
-            return null;
-          }
-          final expected = _buf.readUint32LE();
-          final blockData = _currentBlockData!;
-          final actual = xxh32(blockData, seed: 0);
-          if (actual != expected) {
-            throw const Lz4CorruptDataException('Block checksum mismatch');
+            final expected = _buf.readUint32LE();
+            final actual = xxh32(_currentBlockData!, seed: 0);
+            if (actual != expected) {
+              throw const Lz4CorruptDataException('Block checksum mismatch');
+            }
           }
 
           final out = _decodeCurrentBlockAndUpdateState();
@@ -349,6 +354,16 @@ final class _Lz4FrameStreamDecoder {
           if (cSize == 0) {
             throw const Lz4CorruptDataException('Invalid legacy block size');
           }
+
+          // Legacy blocks are exactly 8MB uncompressed. Compressed blocks
+          // shouldn't exceed this by much (if at all), so we use 8MB as a safe
+          // upper bound for the compressed size to prevent unbounded buffering.
+          const legacyBlockMaxSize = 8 * 1024 * 1024;
+          if (cSize > legacyBlockMaxSize) {
+            throw const Lz4CorruptDataException(
+                'Legacy block size exceeds maximum');
+          }
+
           _legacyBlockCSize = cSize;
           _state = _State.legacyBlockData;
           continue;
@@ -370,8 +385,12 @@ final class _Lz4FrameStreamDecoder {
           }
           _totalProduced += produced.length;
 
+          if (produced.length == legacyBlockMaxSize) {
+            _state = _State.legacyBlockSize;
+            return produced;
+          }
+
           _legacyPending = produced;
-          _legacyPendingLen = produced.length;
           _state = _State.legacyAfterBlock;
           continue;
 
@@ -387,7 +406,6 @@ final class _Lz4FrameStreamDecoder {
               return null;
             }
             _legacyPending = null;
-            _legacyPendingLen = 0;
             _state = _State.magic;
             return pending;
           }
@@ -395,19 +413,11 @@ final class _Lz4FrameStreamDecoder {
           final next = _buf.peekUint32LE();
           if (_isLegacyBoundary(next)) {
             _legacyPending = null;
-            _legacyPendingLen = 0;
             _state = _State.magic;
             return pending;
           }
 
-          if (_legacyPendingLen != 8 * 1024 * 1024) {
-            throw const Lz4CorruptDataException('Legacy block is not full');
-          }
-
-          _legacyPending = null;
-          _legacyPendingLen = 0;
-          _state = _State.legacyBlockSize;
-          return pending;
+          throw const Lz4CorruptDataException('Legacy block is not full');
       }
     }
   }
@@ -430,7 +440,7 @@ final class _Lz4FrameStreamDecoder {
 
     Uint8List produced;
     if (_currentBlockUncompressed) {
-      produced = blockData;
+      produced = Uint8List.fromList(blockData);
     } else {
       if (_blockIndependence) {
         final dict = _dict;
@@ -487,8 +497,7 @@ final class _Lz4FrameStreamDecoder {
             throw const Lz4CorruptDataException('Block size exceeds maximum');
           }
 
-          final decoded = blockWriter.bytesView();
-          produced = Uint8List.fromList(decoded.sublist(prefixLen));
+          produced = blockWriter.bytesView().sublist(prefixLen);
         } else {
           final blockWriter = ByteWriter(maxLength: historyLen + _blockMaxSize);
           if (historyLen != 0) {
@@ -501,8 +510,7 @@ final class _Lz4FrameStreamDecoder {
             throw const Lz4CorruptDataException('Block size exceeds maximum');
           }
 
-          final decoded = blockWriter.bytesView();
-          produced = Uint8List.fromList(decoded.sublist(historyLen));
+          produced = blockWriter.bytesView().sublist(historyLen);
         }
       }
     }
@@ -563,6 +571,7 @@ final class _Lz4FrameStreamDecoder {
     if (expectedSize != null && _frameProduced != expectedSize) {
       throw const Lz4CorruptDataException('Content size mismatch');
     }
+    _buf.reset();
   }
 
   void _resetFrameState() {
@@ -594,17 +603,42 @@ final class _Lz4FrameStreamDecoder {
 
     _legacyBlockCSize = 0;
     _legacyPending = null;
-    _legacyPendingLen = 0;
+  }
+
+  int _decodeBlockMaxSize(int bd) {
+    switch (bd) {
+      case 4:
+        return 64 * 1024;
+      case 5:
+        return 256 * 1024;
+      case 6:
+        return 1024 * 1024;
+      case 7:
+        return 4 * 1024 * 1024;
+      default:
+        throw const Lz4FormatException('Invalid block maximum size');
+    }
+  }
+
+  bool _isLegacyBoundary(int magic) {
+    if (magic == _lz4FrameMagic || magic == _lz4LegacyFrameMagic) {
+      return true;
+    }
+    return (magic & _lz4SkippableMagicMask) == _lz4SkippableMagicBase;
   }
 }
 
 final class _ChunkBuffer {
+  static const int _maxSafeCapacity = 0x7FFFFFFF; // 2GB
+
   Uint8List _buffer;
   int _start;
   int _end;
+  final int _initialCapacity;
 
   _ChunkBuffer({int initialCapacity = 1024})
       : _buffer = Uint8List(initialCapacity),
+        _initialCapacity = initialCapacity,
         _start = 0,
         _end = 0;
 
@@ -647,6 +681,15 @@ final class _ChunkBuffer {
     return (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) & 0xffffffff;
   }
 
+  Uint8List readBytes(int n) {
+    if (!has(n)) {
+      throw const Lz4FormatException('Unexpected end of input');
+    }
+    final res = Uint8List.sublistView(_buffer, _start, _start + n);
+    _start += n;
+    return res;
+  }
+
   int peekUint32LE() {
     if (!has(4)) {
       throw const Lz4FormatException('Unexpected end of input');
@@ -659,78 +702,78 @@ final class _ChunkBuffer {
   }
 
   int peekUint8At(int offset) {
-    if (offset < 0) {
-      throw RangeError.value(offset, 'offset');
-    }
-    final needed = offset + 1;
-    if (!has(needed)) {
+    if (!has(offset + 1)) {
       throw const Lz4FormatException('Unexpected end of input');
     }
     return _buffer[_start + offset];
   }
 
-  Uint8List readBytes(int n) {
+  void reset() {
+    final len = length;
+    if (_buffer.length <= _initialCapacity) {
+      if (_start > 0 && len > 0) {
+        _buffer.setRange(0, len, _buffer, _start);
+      }
+      _start = 0;
+      _end = len;
+      return;
+    }
+    // Shrink
+    final targetCapacity = len > _initialCapacity ? len : _initialCapacity;
+    final newBuffer = Uint8List(targetCapacity);
+    if (len > 0) {
+      newBuffer.setRange(0, len, _buffer, _start);
+    }
+    _buffer = newBuffer;
+    _start = 0;
+    _end = len;
+  }
+
+  void _ensureCapacity(int n) {
     if (n < 0) {
       throw RangeError.value(n, 'n');
     }
-    if (!has(n)) {
-      throw const Lz4FormatException('Unexpected end of input');
-    }
-    final out = Uint8List.fromList(_buffer.sublist(_start, _start + n));
-    _start += n;
-    return out;
-  }
 
-  void _ensureCapacity(int additional) {
-    final remaining = length;
-
-    if (_start != 0 && (_end + additional > _buffer.length)) {
-      for (var i = 0; i < remaining; i++) {
-        _buffer[i] = _buffer[_start + i];
-      }
+    if (length == 0) {
       _start = 0;
-      _end = remaining;
+      _end = 0;
     }
 
-    final needed = _end + additional;
-    if (needed <= _buffer.length) {
+    final newLength = length + n;
+    if (newLength > _maxSafeCapacity) {
+      throw const Lz4Exception('Buffer capacity exceeded 2GB limit');
+    }
+
+    if (_end + n <= _buffer.length) {
       return;
     }
 
-    var newCap = _buffer.length;
-    while (newCap < needed) {
-      newCap *= 2;
+    final len = length;
+    if (len + n <= _buffer.length) {
+      // Compact
+      _buffer.setRange(0, len, _buffer, _start);
+      _start = 0;
+      _end = len;
+      return;
     }
 
-    final next = Uint8List(newCap);
-    next.setRange(0, remaining, _buffer, _start);
-    _buffer = next;
-    _start = 0;
-    _end = remaining;
-  }
-}
+    // Grow
+    var newCapacity = _buffer.isEmpty ? 1024 : _buffer.length;
+    while (newCapacity < newLength) {
+      if (newCapacity <= _maxSafeCapacity ~/ 2) {
+        newCapacity *= 2;
+      } else {
+        newCapacity = _maxSafeCapacity;
+      }
+    }
 
-int _decodeBlockMaxSize(int id) {
-  switch (id) {
-    case 4:
-      return 64 * 1024;
-    case 5:
-      return 256 * 1024;
-    case 6:
-      return 1024 * 1024;
-    case 7:
-      return 4 * 1024 * 1024;
-    default:
-      throw const Lz4FormatException('Invalid block maximum size');
+    final newBuffer = Uint8List(newCapacity);
+    newBuffer.setRange(0, len, _buffer, _start);
+    _buffer = newBuffer;
+    _start = 0;
+    _end = len;
   }
 }
 
 List<int> _u32le(int v) =>
     <int>[v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >> 24) & 0xff];
-
-bool _isLegacyBoundary(int magic) {
-  if (magic == _lz4FrameMagic || magic == _lz4LegacyFrameMagic) {
-    return true;
-  }
-  return (magic & _lz4SkippableMagicMask) == _lz4SkippableMagicBase;
-}
