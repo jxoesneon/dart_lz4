@@ -7,34 +7,6 @@ const _hashLog = 16;
 const _hashSize = 1 << _hashLog;
 const _hashShift = 32 - _hashLog;
 
-final Int32List _hashTableScratch = Int32List(_hashSize);
-Int32List _chainScratch = Int32List(0);
-
-Uint8List _dictScratch = Uint8List(0);
-
-Uint8List _ensureDictScratch(int minLength) {
-  if (_dictScratch.length < minLength) {
-    var newLen = _dictScratch.isEmpty ? minLength : _dictScratch.length;
-    while (newLen < minLength) {
-      newLen *= 2;
-    }
-    _dictScratch = Uint8List(newLen);
-  }
-  return _dictScratch;
-}
-
-Int32List _ensureChainScratch(int minLength) {
-  if (_chainScratch.length < minLength) {
-    var newLen = _chainScratch.isEmpty ? minLength : _chainScratch.length;
-    while (newLen < minLength) {
-      newLen *= 2;
-    }
-    _chainScratch = Int32List(newLen);
-  }
-  _chainScratch.fillRange(0, minLength, -1);
-  return _chainScratch;
-}
-
 Uint8List lz4HcBlockCompress(
   Uint8List src, {
   Uint8List? dictionary,
@@ -77,10 +49,10 @@ void lz4HcBlockCompressToWriter(
     input = src;
   } else {
     final totalLength = dictLength + inputLength;
-    final scratch = _ensureDictScratch(totalLength);
+    final scratch = Uint8List(totalLength);
     scratch.setRange(0, dictLength, dict!);
     scratch.setRange(dictLength, totalLength, src);
-    input = Uint8List.sublistView(scratch, 0, totalLength);
+    input = scratch;
   }
 
   const minMatch = 4;
@@ -89,16 +61,19 @@ void lz4HcBlockCompressToWriter(
     return;
   }
 
-  final hashTable = _hashTableScratch;
+  final hashTable = Int32List(_hashSize);
   hashTable.fillRange(0, _hashSize, -1);
-  final chain = _ensureChainScratch(input.length);
+  final chain = Int32List(input.length);
+  chain.fillRange(0, input.length, -1);
 
   int insert(int pos) {
     final seq = _readUint32LE(input, pos);
     final h = _hash(seq, _hashShift);
     final ref = hashTable[h];
-    chain[pos] = ref;
-    hashTable[h] = pos;
+    if (ref < pos) {
+      chain[pos] = ref;
+      hashTable[h] = pos;
+    }
     return ref;
   }
 
@@ -112,8 +87,9 @@ void lz4HcBlockCompressToWriter(
   var i = dictLength;
 
   final totalLength = input.length;
+  final searchLimit = totalLength - 12;
 
-  while (i <= totalLength - minMatch) {
+  while (i <= searchLimit) {
     var candidate = insert(i);
 
     var bestLen = 0;
@@ -123,21 +99,19 @@ void lz4HcBlockCompressToWriter(
     while (candidate >= 0 && depth < opt.maxSearchDepth) {
       final distance = i - candidate;
       if (distance > 0xFFFF) {
-        candidate = chain[candidate];
-        depth++;
-        continue;
+        break;
       }
 
       if (_readUint32LE(input, candidate) == _readUint32LE(input, i)) {
         var matchLen = minMatch;
-        while (i + matchLen < totalLength &&
+        while (i + matchLen < totalLength - 5 &&
             input[i + matchLen] == input[candidate + matchLen]) {
           matchLen++;
         }
         if (matchLen > bestLen) {
           bestLen = matchLen;
           bestRef = candidate;
-          if (i + bestLen == totalLength) {
+          if (i + bestLen >= totalLength - 5) {
             break;
           }
         }
