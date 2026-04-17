@@ -55,7 +55,11 @@ final class Xxh32 {
       return;
     }
 
-    _totalLen += length;
+    final nextLen = _totalLen + length;
+    if (identical(0, 0.0) && nextLen > 9007199254740991) {
+      throw UnsupportedError('xxhash32 precision loss on Web');
+    }
+    _totalLen = nextLen;
 
     if (_memSize + length < 16) {
       _mem.setRange(_memSize, _memSize + length, input, p);
@@ -82,27 +86,17 @@ final class Xxh32 {
 
     final limit = p + length - 16;
 
-    // Optimization: Use Uint32List view if aligned and Little Endian
+    // Optimization: Use ByteData if aligned and Little Endian
     if (Endian.host == Endian.little && (input.offsetInBytes + p) % 4 == 0) {
-      // We can use 32-bit reads directly
-      final u32 = input.buffer.asUint32List(input.offsetInBytes + p);
+      final bd = ByteData.sublistView(input, p, e);
       var idx = 0;
       while (p <= limit) {
-        _v1 = _round(_v1, u32[idx]);
-        p += 4;
-        idx++;
-
-        _v2 = _round(_v2, u32[idx]);
-        p += 4;
-        idx++;
-
-        _v3 = _round(_v3, u32[idx]);
-        p += 4;
-        idx++;
-
-        _v4 = _round(_v4, u32[idx]);
-        p += 4;
-        idx++;
+        _v1 = _round(_v1, bd.getUint32(idx, Endian.little));
+        _v2 = _round(_v2, bd.getUint32(idx + 4, Endian.little));
+        _v3 = _round(_v3, bd.getUint32(idx + 8, Endian.little));
+        _v4 = _round(_v4, bd.getUint32(idx + 12, Endian.little));
+        p += 16;
+        idx += 16;
       }
     } else {
       while (p <= limit) {
@@ -176,26 +170,17 @@ int xxh32(Uint8List input, {int seed = 0}) {
 
     final limit = len - 16;
 
-    // Optimization: Use Uint32List view if aligned and Little Endian
+    // Optimization: Use ByteData if aligned and Little Endian
     if (Endian.host == Endian.little && (input.offsetInBytes + p) % 4 == 0) {
-      final u32 = input.buffer.asUint32List(input.offsetInBytes + p);
+      final bd = ByteData.sublistView(input, p, len);
       var idx = 0;
       while (p <= limit) {
-        v1 = _round(v1, u32[idx]);
-        p += 4;
-        idx++;
-
-        v2 = _round(v2, u32[idx]);
-        p += 4;
-        idx++;
-
-        v3 = _round(v3, u32[idx]);
-        p += 4;
-        idx++;
-
-        v4 = _round(v4, u32[idx]);
-        p += 4;
-        idx++;
+        v1 = _round(v1, bd.getUint32(idx, Endian.little));
+        v2 = _round(v2, bd.getUint32(idx + 4, Endian.little));
+        v3 = _round(v3, bd.getUint32(idx + 8, Endian.little));
+        v4 = _round(v4, bd.getUint32(idx + 12, Endian.little));
+        p += 16;
+        idx += 16;
       }
     } else {
       while (p <= limit) {

@@ -17,9 +17,13 @@ Uint8List lz4FrameDecodeBytes(
   int? maxOutputBytes,
   Lz4DictionaryResolver? dictionaryResolver,
 }) {
+  // If maxOutputBytes is omitted, we use a default limit of 256MB to prevent
+  // decompression bombs from exhausting memory. Users can override this by
+  // providing their own limit.
+  const defaultMaxOutputBytes = 256 * 1024 * 1024;
   return _Lz4FrameDecoder(
     src,
-    maxOutputBytes: maxOutputBytes,
+    maxOutputBytes: maxOutputBytes ?? defaultMaxOutputBytes,
     dictionaryResolver: dictionaryResolver,
   ).decodeAll();
 }
@@ -80,6 +84,10 @@ final class _Lz4FrameDecoder {
       throw const Lz4FormatException('Unexpected end of input');
     }
     final size = _reader.readUint32LE();
+    // Reasonable upper bound for skippable frames (2GB)
+    if (size > 0x7FFFFFFF) {
+      throw const Lz4FormatException('Skippable frame size too large');
+    }
     _reader.skip(size);
   }
 
@@ -202,6 +210,10 @@ final class _Lz4FrameDecoder {
         throw const Lz4FormatException('Unexpected end of input');
       }
       contentSize = _reader.readUint64LE();
+      if (_maxOutputBytes != null && contentSize > _maxOutputBytes) {
+        throw const Lz4OutputLimitException(
+            'Content size exceeds output limit');
+      }
     }
 
     int? dictId;

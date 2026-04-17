@@ -32,7 +32,7 @@ final class ByteWriter {
 
   Uint8List bytesView() => Uint8List.sublistView(_buffer, 0, _length);
 
-  Uint8List toBytes() => Uint8List.fromList(_buffer.sublist(0, _length));
+  Uint8List toBytes() => _buffer.sublist(0, _length);
 
   void clear() {
     _length = 0;
@@ -120,14 +120,16 @@ final class ByteWriter {
     _length = end;
   }
 
+  static const int _maxSafeCapacity = 0x7FFFFFFF; // 2GB
+
   void _ensureCapacity(int additional) {
     if (additional < 0) {
       throw RangeError.value(additional, 'additional');
     }
 
     final newLength = _length + additional;
-    final maxLength = _maxLength;
-    if (maxLength != null && newLength > maxLength) {
+    final maxLength = _maxLength ?? _maxSafeCapacity;
+    if (newLength > maxLength) {
       throw const Lz4OutputLimitException('Output limit exceeded');
     }
 
@@ -137,14 +139,15 @@ final class ByteWriter {
 
     var newCapacity = _buffer.isEmpty ? 64 : _buffer.length;
     while (newCapacity < newLength) {
-      newCapacity *= 2;
+      if (newCapacity <= _maxSafeCapacity ~/ 2) {
+        newCapacity *= 2;
+      } else {
+        newCapacity = _maxSafeCapacity;
+      }
     }
 
-    if (maxLength != null && newCapacity > maxLength) {
+    if (newCapacity > maxLength) {
       newCapacity = maxLength;
-      if (newCapacity < newLength) {
-        throw const Lz4OutputLimitException('Output limit exceeded');
-      }
     }
 
     final next = Uint8List(newCapacity);
