@@ -6,6 +6,18 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-04-17
+
+- **Security**: Hardened legacy and skippable frame decoders against memory exhaustion (DoS) by enforcing strict sizing bounds (8MB max for legacy, 2GB ceiling for skippable).
+- **Security**: Hardened block decoders against CPU exhaustion via malformed extended length sequences.
+- **Security**: Added robust `try-catch` boundaries around block decoders to prevent fuzzing data from leaking internal VM exceptions (`RangeError`, `StateError`).
+- **Compliance**: Enforced strict LZ4 specification compliance in both standard and HC encoders: the last 5 bytes must be literals, and the last match must end at least 12 bytes before the block end.
+- **Performance**: Fixed an `O(N^2)` buffer compaction trap in the streaming frame decoder, significantly improving throughput on heavily fragmented streams.
+- **Performance**: Optimized HC encoder match searching to immediately break when candidates exceed the 65,535 sliding window, eliminating deep-search CPU stalls on sparse data.
+- **Fix**: Prevented "circular chain" logic poisoning in the HC encoder that could lead to infinite loops.
+- **Fix**: Implemented Web (JavaScript) precision loss safeguards for 64-bit content size integers exceeding 53 bits.
+- **Maintenance**: Resolved all static analysis warnings.
+
 ## [1.0.0] - 2025-12-19
 
 - **Feature**: Added `lz4SkippableEncode` for encoding skippable frames (user-defined metadata).
