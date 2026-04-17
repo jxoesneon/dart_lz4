@@ -6,6 +6,10 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-04-17
+
+- **Fix**: Triggered an automated release workflow to ensure a clean publish to pub.dev after fixing release pipeline configuration.
+
 ## [1.1.0] - 2026-04-17
 
 - **Security**: Hardened legacy and skippable frame decoders against memory exhaustion (DoS) by enforcing strict sizing bounds (8MB max for legacy, 2GB ceiling for skippable).
