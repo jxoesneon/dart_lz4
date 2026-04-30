@@ -7,7 +7,7 @@
 ///
 /// All APIs are `Uint8List`-based and are intended to work on all Dart
 /// platforms, including Web.
-library dart_lz4;
+library;
 
 import 'dart:async';
 import 'dart:typed_data';

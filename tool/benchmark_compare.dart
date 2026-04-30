@@ -2,9 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 Future<void> main(List<String> args) async {
-  var baselinePath = 'benchmark/baseline/macos.txt';
+  String? baselinePath;
   String? currentPath;
   var runBench = false;
+  double? threshold;
+  var githubSummary = false;
 
   for (var i = 0; i < args.length; i++) {
     final a = args[i];
@@ -28,6 +30,22 @@ Future<void> main(List<String> args) async {
       case '--run':
         runBench = true;
         break;
+      case '--threshold':
+        if (i + 1 >= args.length) {
+          stderr.writeln('Missing value for --threshold');
+          exitCode = 2;
+          return;
+        }
+        threshold = double.tryParse(args[++i]);
+        if (threshold == null) {
+          stderr.writeln('Invalid threshold: ${args[i]}');
+          exitCode = 2;
+          return;
+        }
+        break;
+      case '--github-summary':
+        githubSummary = true;
+        break;
       case '--help':
       case '-h':
         _printUsage();
@@ -45,9 +63,38 @@ Future<void> main(List<String> args) async {
     Directory.current = repoRoot;
   }
 
-  final baselineText = await File(baselinePath).readAsString();
-  final baselineOut = _extractBenchmarkOutput(baselineText) ?? baselineText;
-  final baseline = _parseOutput(baselineOut);
+  if (baselinePath == null) {
+    // Try to auto-detect baseline based on OS
+    final os = Platform.isMacOS
+        ? 'macos'
+        : Platform.isWindows
+            ? 'windows'
+            : 'linux';
+    final candidate = 'benchmark/baseline/$os.txt';
+    if (File(candidate).existsSync()) {
+      baselinePath = candidate;
+    } else {
+      // Fallback to macos.txt if it's the only one we have
+      baselinePath = 'benchmark/baseline/macos.txt';
+    }
+  }
+
+  if (!File(baselinePath).existsSync()) {
+    stderr.writeln('Baseline file not found: $baselinePath');
+    if (runBench) {
+      stderr.writeln('Running benchmark anyway...');
+    } else {
+      exitCode = 2;
+      return;
+    }
+  }
+
+  Map<String, Map<String, Map<String, num>>>? baseline;
+  if (File(baselinePath).existsSync()) {
+    final baselineText = await File(baselinePath).readAsString();
+    final baselineOut = _extractBenchmarkOutput(baselineText) ?? baselineText;
+    baseline = _parseOutput(baselineOut);
+  }
 
   String currentText;
   if (runBench) {
@@ -81,7 +128,29 @@ Future<void> main(List<String> args) async {
 
   final current = _parseOutput(currentText);
 
-  _printComparison(baseline: baseline, current: current);
+  if (baseline == null) {
+    _printCurrentOnly(current);
+    return;
+  }
+
+  final results = _compare(baseline: baseline, current: current);
+  _printComparison(results);
+
+  if (githubSummary) {
+    await _writeGithubSummary(results);
+  }
+
+  if (threshold != null) {
+    final regressions = _findRegressions(results, threshold);
+    if (regressions.isNotEmpty) {
+      stderr.writeln(
+          '\nPerformance regressions detected (threshold: $threshold%):');
+      for (final r in regressions) {
+        stderr.writeln('  $r');
+      }
+      exitCode = 1;
+    }
+  }
 }
 
 String? _findRepoRoot() {
@@ -168,25 +237,42 @@ Map<String, Map<String, Map<String, num>>> _parseOutput(String text) {
   return out;
 }
 
-void _printComparison({
+class ComparisonResult {
+  final String dataset;
+  final String label;
+  final String metric;
+  final num? baseline;
+  final num? current;
+  final num? delta;
+  final double? percent;
+
+  ComparisonResult({
+    required this.dataset,
+    required this.label,
+    required this.metric,
+    this.baseline,
+    this.current,
+    this.delta,
+    this.percent,
+  });
+}
+
+List<ComparisonResult> _compare({
   required Map<String, Map<String, Map<String, num>>> baseline,
   required Map<String, Map<String, Map<String, num>>> current,
 }) {
+  final results = <ComparisonResult>[];
   final datasets = <String>{...baseline.keys, ...current.keys}.toList()..sort();
 
   for (final dataset in datasets) {
-    stdout.writeln('--- $dataset ---');
-
     final baseLabels = baseline[dataset] ?? const {};
     final currLabels = current[dataset] ?? const {};
-
     final labels = <String>{...baseLabels.keys, ...currLabels.keys}.toList()
       ..sort();
 
     for (final label in labels) {
       final b = baseLabels[label] ?? const {};
       final c = currLabels[label] ?? const {};
-
       final metrics = <String>{...b.keys, ...c.keys}.toList()
         ..sort(_metricSort);
 
@@ -194,31 +280,116 @@ void _printComparison({
         final bv = b[metric];
         final cv = c[metric];
 
-        final baseStr = bv == null ? '—' : _format(metric, bv);
-        final currStr = cv == null ? '—' : _format(metric, cv);
+        num? delta;
+        double? percent;
 
-        String deltaStr;
-        if (bv == null || cv == null) {
-          deltaStr = '';
-        } else if (metric == 'compressed_bytes') {
-          final delta = (cv as int) - (bv as int);
-          deltaStr = '  (${_signedInt(delta)})';
-        } else {
-          final baseD = bv.toDouble();
-          final currD = cv.toDouble();
-          final delta = currD - baseD;
-          final pct = baseD == 0 ? null : (delta / baseD) * 100.0;
-          deltaStr = pct == null
-              ? '  (${_signed(delta)})'
-              : '  (${_signed(delta)}, ${_signed(pct)}%)';
+        if (bv != null && cv != null) {
+          if (metric == 'compressed_bytes') {
+            delta = (cv as int) - (bv as int);
+          } else {
+            final baseD = bv.toDouble();
+            final currD = cv.toDouble();
+            delta = currD - baseD;
+            if (baseD != 0) {
+              percent = (delta / baseD) * 100.0;
+            }
+          }
         }
 
-        stdout.writeln('[$label] $metric: $baseStr -> $currStr$deltaStr');
+        results.add(ComparisonResult(
+          dataset: dataset,
+          label: label,
+          metric: metric,
+          baseline: bv,
+          current: cv,
+          delta: delta,
+          percent: percent,
+        ));
+      }
+    }
+  }
+  return results;
+}
+
+void _printComparison(List<ComparisonResult> results) {
+  String? lastDataset;
+  for (final r in results) {
+    if (r.dataset != lastDataset) {
+      stdout.writeln('--- ${r.dataset} ---');
+      lastDataset = r.dataset;
+    }
+
+    final baseStr = r.baseline == null ? '—' : _format(r.metric, r.baseline!);
+    final currStr = r.current == null ? '—' : _format(r.metric, r.current!);
+
+    String deltaStr = '';
+    if (r.delta != null) {
+      if (r.metric == 'compressed_bytes') {
+        deltaStr = '  (${_signedInt(r.delta!.toInt())})';
+      } else {
+        deltaStr = r.percent == null
+            ? '  (${_signed(r.delta!)})'
+            : '  (${_signed(r.delta!)}, ${_signed(r.percent!)})';
       }
     }
 
+    stdout.writeln('[${r.label}] ${r.metric}: $baseStr -> $currStr$deltaStr');
+  }
+}
+
+void _printCurrentOnly(Map<String, Map<String, Map<String, num>>> current) {
+  for (final dataset in current.keys.toList()..sort()) {
+    stdout.writeln('--- $dataset ---');
+    final labels = current[dataset]!.keys.toList()..sort();
+    for (final label in labels) {
+      final metrics = current[dataset]![label]!.keys.toList()
+        ..sort(_metricSort);
+      for (final metric in metrics) {
+        final val = current[dataset]![label]![metric]!;
+        stdout.writeln('[$label] $metric: ${_format(metric, val)}');
+      }
+    }
     stdout.writeln('');
   }
+}
+
+Future<void> _writeGithubSummary(List<ComparisonResult> results) async {
+  final summaryFile = Platform.environment['GITHUB_STEP_SUMMARY'];
+  if (summaryFile == null) return;
+
+  final sink = File(summaryFile).openWrite(mode: FileMode.append);
+  sink.writeln('## Benchmark Comparison');
+  sink.writeln('');
+  sink.writeln('| Dataset | Label | Metric | Baseline | Current | Delta | % |');
+  sink.writeln('|---------|-------|--------|----------|---------|-------|---|');
+
+  for (final r in results) {
+    final baseStr = r.baseline == null ? '—' : _format(r.metric, r.baseline!);
+    final currStr = r.current == null ? '—' : _format(r.metric, r.current!);
+    final deltaStr = r.delta == null ? '—' : _format(r.metric, r.delta!);
+    final pctStr = r.percent == null ? '—' : '${_signed(r.percent!)}%';
+
+    sink.writeln(
+        '| ${r.dataset} | ${r.label} | ${r.metric} | $baseStr | $currStr | $deltaStr | $pctStr |');
+  }
+
+  sink.writeln('');
+  await sink.close();
+}
+
+List<String> _findRegressions(
+    List<ComparisonResult> results, double threshold) {
+  final regressions = <String>[];
+  for (final r in results) {
+    // Only check throughput metrics (compress, decompress, encode, decode)
+    if (r.metric == 'ratio' || r.metric == 'compressed_bytes') continue;
+
+    if (r.percent != null && r.percent! < -threshold) {
+      regressions.add(
+          '${r.dataset} [${r.label}] ${r.metric}: ${_signed(r.percent!)}% (threshold: -$threshold%)');
+    }
+  }
+  return regressions;
 }
 
 int _metricSort(String a, String b) {
@@ -275,13 +446,16 @@ void _printUsage() {
   stdout.writeln('Usage: dart run tool/benchmark_compare.dart [options]');
   stdout.writeln('');
   stdout.writeln('Options:');
+  stdout.writeln('  --baseline <path>     Baseline file');
   stdout.writeln(
-      '  --baseline <path>   Baseline file (default: benchmark/baseline/macos.txt)');
+      '  --current <path>      Current benchmark output file (if not using --run)');
   stdout.writeln(
-      '  --current <path>    Current benchmark output file (if not using --run)');
+      '  --run                 Run benchmark/lz4_benchmark.dart and compare stdout');
   stdout.writeln(
-      '  --run               Run benchmark/lz4_benchmark.dart and compare stdout');
-  stdout.writeln('  -h, --help          Show this help');
+      '  --threshold <%>       Exit with 1 if throughput drops more than %');
+  stdout.writeln(
+      '  --github-summary      Write Markdown table to GITHUB_STEP_SUMMARY');
+  stdout.writeln('  -h, --help            Show this help');
   stdout.writeln('');
   stdout.writeln(
       'If neither --current nor --run is provided, current output is read from stdin.');
