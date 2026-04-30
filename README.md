@@ -1,7 +1,8 @@
 # dart_lz4
 
 [![CI](https://github.com/jxoesneon/dart_lz4/actions/workflows/ci.yml/badge.svg)](https://github.com/jxoesneon/dart_lz4/actions/workflows/ci.yml)
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/jxoesneon/dart_lz4/badge)](https://securityscorecards.dev/viewer/?uri=github.com/jxoesneon/dart_lz4)
+[![OpenSSF Best Practices](https://bestpractices.coreinfrastructure.org/projects/9999/badge)](docs/OSSF_BEST_PRACTICES.md)
+[![Fuzzing Status](https://github.com/jxoesneon/dart_lz4/actions/workflows/fuzzing.yml/badge.svg)](https://github.com/jxoesneon/dart_lz4/actions/workflows/fuzzing.yml)
 
 Pure Dart implementation of LZ4 (block + frame) and LZ4HC, including streaming frame encode/decode.
 

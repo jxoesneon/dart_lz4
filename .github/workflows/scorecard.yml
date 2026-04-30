@@ -25,6 +25,8 @@ jobs:
       contents: read
       security-events: write
       id-token: write
+      actions: read
+      pull-requests: read
 
     steps:
       - name: Checkout
