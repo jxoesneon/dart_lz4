@@ -53,6 +53,10 @@ jobs:
       - name: Test (Chrome)
         run: dart test -p chrome
 
+      - name: Benchmark
+        run: dart run tool/benchmark_compare.dart --run --github-summary --threshold 15
+        continue-on-error: true
+
       - name: Dartdoc
         run: dart doc
 

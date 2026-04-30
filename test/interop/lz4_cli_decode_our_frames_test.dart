@@ -1,5 +1,5 @@
 @TestOn('vm')
-library lz4_cli_decode_our_frames_test;
+library;
 
 import 'dart:io';
 import 'dart:math';
