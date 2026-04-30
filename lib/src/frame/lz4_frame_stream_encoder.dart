@@ -1,11 +1,10 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import '../block/lz4_block_encoder.dart';
 import '../internal/byte_writer.dart';
 import '../internal/lz4_exception.dart';
-import '../hc/lz4_hc_block_encoder.dart';
 import '../xxhash/xxh32.dart';
+import 'lz4_engine_factory.dart';
 import 'lz4_frame_options.dart';
 
 const _lz4FrameMagic = 0x184D2204;
@@ -104,6 +103,7 @@ StreamTransformer<List<int>, List<int>> lz4FrameEncoderTransformerWithOptions({
     }
 
     final blockWriter = ByteWriter(initialCapacity: blockMaxSize + 16);
+    final engine = createLz4Engine(options);
 
     Uint8List encodeBlock(Uint8List chunk, Uint8List? dictionary) {
       blockWriter.clear();
@@ -111,24 +111,7 @@ StreamTransformer<List<int>, List<int>> lz4FrameEncoderTransformerWithOptions({
       blockWriter.writeUint32LE(0);
       final payloadStart = 4;
 
-      switch (options.compression) {
-        case Lz4FrameCompression.fast:
-          lz4BlockCompressToWriter(
-            blockWriter,
-            chunk,
-            dictionary: dictionary,
-            acceleration: options.acceleration,
-          );
-          break;
-        case Lz4FrameCompression.hc:
-          lz4HcBlockCompressToWriter(
-            blockWriter,
-            chunk,
-            dictionary: dictionary,
-            options: options.hcOptions,
-          );
-          break;
-      }
+      engine.compress(blockWriter, chunk, dictionary: dictionary);
 
       final compressedLen = blockWriter.length - payloadStart;
       final useCompressed = compressedLen < chunk.length;

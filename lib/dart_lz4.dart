@@ -24,7 +24,7 @@ export 'src/frame/lz4_frame_options.dart'
         Lz4FrameBlockSize,
         Lz4FrameCompression,
         Lz4DictionaryResolver;
-export 'src/hc/lz4_hc_options.dart' show Lz4HcOptions;
+export 'src/hc/lz4_hc_options.dart' show Lz4HcOptions, Lz4HcLevel;
 
 import 'src/block/lz4_block_decoder.dart';
 import 'src/block/lz4_block_encoder.dart';
