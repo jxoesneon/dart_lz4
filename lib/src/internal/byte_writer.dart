@@ -1,14 +1,22 @@
 import 'dart:typed_data';
 
+import 'lz4_buffer_pool.dart';
 import 'lz4_exception.dart';
 
 final class ByteWriter {
   Uint8List _buffer;
   int _length;
   final int? _maxLength;
+  final Lz4BufferPool? _bufferPool;
 
-  ByteWriter({int initialCapacity = 0, int? maxLength})
-      : _buffer = Uint8List(initialCapacity < 0 ? 0 : initialCapacity),
+  ByteWriter({
+    int initialCapacity = 0,
+    int? maxLength,
+    Lz4BufferPool? bufferPool,
+  })  : _bufferPool = bufferPool,
+        _buffer =
+            bufferPool?.checkout(initialCapacity < 0 ? 0 : initialCapacity) ??
+                Uint8List(initialCapacity < 0 ? 0 : initialCapacity),
         _length = 0,
         _maxLength = maxLength {
     if (initialCapacity < 0) {
@@ -36,6 +44,17 @@ final class ByteWriter {
 
   void clear() {
     _length = 0;
+  }
+
+  /// Releases the internal buffer back to the pool if one is used.
+  /// After calling this, the [ByteWriter] should no longer be used.
+  void release() {
+    final bufferPool = _bufferPool;
+    if (bufferPool != null) {
+      bufferPool.checkin(_buffer);
+      _buffer = Uint8List(0);
+      _length = 0;
+    }
   }
 
   void writeUint8(int value) {
@@ -113,7 +132,43 @@ final class ByteWriter {
       return;
     }
 
-    for (var dest = destStart; dest < end; dest++) {
+    if (distance >= matchLength) {
+      _buffer.setRange(destStart, end, _buffer, destStart - distance);
+      _length = end;
+      return;
+    }
+
+    var dest = destStart;
+    final isWeb = identical(0, 0.0);
+
+    if (distance >= 8 && matchLength >= 8) {
+      final bd = ByteData.view(_buffer.buffer, _buffer.offsetInBytes);
+      if (isWeb) {
+        // Web: Use 32-bit wildcopy (Uint64 is unsupported)
+        final limit = end - 4;
+        while (dest <= limit) {
+          bd.setUint32(
+            dest,
+            bd.getUint32(dest - distance, Endian.little),
+            Endian.little,
+          );
+          dest += 4;
+        }
+      } else {
+        // VM: Use 64-bit wildcopy
+        final limit = end - 8;
+        while (dest <= limit) {
+          bd.setUint64(
+            dest,
+            bd.getUint64(dest - distance, Endian.little),
+            Endian.little,
+          );
+          dest += 8;
+        }
+      }
+    }
+
+    for (; dest < end; dest++) {
       _buffer[dest] = _buffer[dest - distance];
     }
 
@@ -150,8 +205,12 @@ final class ByteWriter {
       newCapacity = maxLength;
     }
 
-    final next = Uint8List(newCapacity);
+    final next = _bufferPool?.checkout(newCapacity) ?? Uint8List(newCapacity);
     next.setRange(0, _length, _buffer);
+    final bufferPool = _bufferPool;
+    if (bufferPool != null) {
+      bufferPool.checkin(_buffer);
+    }
     _buffer = next;
   }
 }

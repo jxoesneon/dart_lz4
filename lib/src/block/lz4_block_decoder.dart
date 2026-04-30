@@ -2,12 +2,14 @@ import 'dart:typed_data';
 
 import '../internal/byte_reader.dart';
 import '../internal/byte_writer.dart';
+import '../internal/lz4_buffer_pool.dart';
 import '../internal/lz4_exception.dart';
 
 Uint8List lz4BlockDecompress(
   Uint8List src, {
   required int decompressedSize,
   int? maxDecompressedSize,
+  Lz4BufferPool? bufferPool,
 }) {
   if (decompressedSize < 0) {
     throw RangeError.value(decompressedSize, 'decompressedSize');
@@ -21,6 +23,7 @@ Uint8List lz4BlockDecompress(
   final writer = ByteWriter(
     initialCapacity: decompressedSize,
     maxLength: decompressedSize,
+    bufferPool: bufferPool,
   );
 
   try {
@@ -87,6 +90,8 @@ Uint8List lz4BlockDecompress(
     throw const Lz4CorruptDataException('Invalid decoder state');
   } on Lz4OutputLimitException {
     rethrow;
+  } finally {
+    writer.release();
   }
 }
 

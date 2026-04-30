@@ -3,8 +3,8 @@ import 'dart:typed_data';
 import '../block/lz4_block_encoder.dart';
 import '../internal/byte_writer.dart';
 import '../internal/lz4_exception.dart';
-import '../hc/lz4_hc_block_encoder.dart';
 import '../xxhash/xxh32.dart';
+import 'lz4_engine_factory.dart';
 import 'lz4_frame_options.dart';
 
 const _lz4FrameMagic = 0x184D2204;
@@ -150,6 +150,8 @@ Uint8List lz4FrameEncodeBytesWithOptions(
 
   const historyWindow = 64 * 1024;
 
+  final engine = createLz4Engine(options);
+
   var offset = 0;
   while (offset < src.length) {
     var end = offset + blockMaxSize;
@@ -212,24 +214,7 @@ Uint8List lz4FrameEncodeBytesWithOptions(
 
     final payloadStart = writer.length;
 
-    switch (options.compression) {
-      case Lz4FrameCompression.fast:
-        lz4BlockCompressToWriter(
-          writer,
-          chunk,
-          dictionary: blockDict,
-          acceleration: options.acceleration,
-        );
-        break;
-      case Lz4FrameCompression.hc:
-        lz4HcBlockCompressToWriter(
-          writer,
-          chunk,
-          dictionary: blockDict,
-          options: options.hcOptions,
-        );
-        break;
-    }
+    engine.compress(writer, chunk, dictionary: blockDict);
 
     final compressedLen = writer.length - payloadStart;
     final useCompressed = compressedLen < chunk.length;

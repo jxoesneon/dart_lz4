@@ -1,22 +1,19 @@
 import 'dart:typed_data';
 
+import '_xxh32_stub.dart'
+    if (dart.library.io) '_xxh32_vm.dart'
+    if (dart.library.js_interop) '_xxh32_web.dart'
+    if (dart.library.html) '_xxh32_web.dart';
+export '_xxh32_stub.dart'
+    if (dart.library.io) '_xxh32_vm.dart'
+    if (dart.library.js_interop) '_xxh32_web.dart'
+    if (dart.library.html) '_xxh32_web.dart';
+
 const _prime32_1 = 0x9E3779B1;
 const _prime32_2 = 0x85EBCA77;
 const _prime32_3 = 0xC2B2AE3D;
 const _prime32_4 = 0x27D4EB2F;
 const _prime32_5 = 0x165667B1;
-
-int _mul32(int a, int b) {
-  final al = a & 0xffff;
-  final ah = (a >>> 16) & 0xffff;
-  final bl = b & 0xffff;
-  final bh = (b >>> 16) & 0xffff;
-
-  final lo = al * bl;
-  final mid = (ah * bl + al * bh) & 0xffff;
-
-  return (lo + (mid << 16)).toUnsigned(32);
-}
 
 final class Xxh32 {
   final int _seed;
@@ -136,21 +133,21 @@ final class Xxh32 {
     final len = _memSize;
 
     while (p <= len - 4) {
-      h32 = (h32 + _mul32(_readU32LE(_mem, p), _prime32_3)).toUnsigned(32);
-      h32 = _mul32(_rotl32(h32, 17), _prime32_4);
+      h32 = (h32 + mul32(_readU32LE(_mem, p), _prime32_3)).toUnsigned(32);
+      h32 = mul32(_rotl32(h32, 17), _prime32_4);
       p += 4;
     }
 
     while (p < len) {
-      h32 = (h32 + _mul32(_mem[p], _prime32_5)).toUnsigned(32);
-      h32 = _mul32(_rotl32(h32, 11), _prime32_1);
+      h32 = (h32 + mul32(_mem[p], _prime32_5)).toUnsigned(32);
+      h32 = mul32(_rotl32(h32, 11), _prime32_1);
       p++;
     }
 
     h32 ^= (h32 >>> 15);
-    h32 = _mul32(h32, _prime32_2);
+    h32 = mul32(h32, _prime32_2);
     h32 ^= (h32 >>> 13);
-    h32 = _mul32(h32, _prime32_3);
+    h32 = mul32(h32, _prime32_3);
     h32 ^= (h32 >>> 16);
 
     return h32.toUnsigned(32);
@@ -204,30 +201,30 @@ int xxh32(Uint8List input, {int seed = 0}) {
   h32 = (h32 + len).toUnsigned(32);
 
   while (p <= len - 4) {
-    h32 = (h32 + _mul32(_readU32LE(input, p), _prime32_3)).toUnsigned(32);
-    h32 = _mul32(_rotl32(h32, 17), _prime32_4);
+    h32 = (h32 + mul32(_readU32LE(input, p), _prime32_3)).toUnsigned(32);
+    h32 = mul32(_rotl32(h32, 17), _prime32_4);
     p += 4;
   }
 
   while (p < len) {
-    h32 = (h32 + _mul32(input[p], _prime32_5)).toUnsigned(32);
-    h32 = _mul32(_rotl32(h32, 11), _prime32_1);
+    h32 = (h32 + mul32(input[p], _prime32_5)).toUnsigned(32);
+    h32 = mul32(_rotl32(h32, 11), _prime32_1);
     p++;
   }
 
   h32 ^= (h32 >>> 15);
-  h32 = _mul32(h32, _prime32_2);
+  h32 = mul32(h32, _prime32_2);
   h32 ^= (h32 >>> 13);
-  h32 = _mul32(h32, _prime32_3);
+  h32 = mul32(h32, _prime32_3);
   h32 ^= (h32 >>> 16);
 
   return h32.toUnsigned(32);
 }
 
 int _round(int acc, int input) {
-  acc = (acc + _mul32(input, _prime32_2)).toUnsigned(32);
+  acc = (acc + mul32(input, _prime32_2)).toUnsigned(32);
   acc = _rotl32(acc, 13);
-  acc = _mul32(acc, _prime32_1);
+  acc = mul32(acc, _prime32_1);
   return acc;
 }
 
