@@ -30,7 +30,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'link',
       label: 'API Reference',
-      href: '/dart_lz4/api/index.html',
+      href: 'pathname:///api/index.html',
     }
   ],
 };
