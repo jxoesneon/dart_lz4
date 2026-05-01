@@ -29,7 +29,9 @@ jobs:
         run: dart pub get
 
       - name: Generate Dart API Docs
-        run: dart doc .
+        run: |
+          dart doc .
+          cat website/api_custom.css >> doc/api/static-assets/styles.css
         
       - name: Setup Node.js
         uses: actions/setup-node@v4
