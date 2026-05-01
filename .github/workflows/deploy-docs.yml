@@ -1,0 +1,59 @@
+name: Deploy Documentation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'website/**'
+      - 'lib/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/deploy-docs.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Install Dart dependencies
+        run: dart pub get
+
+      - name: Generate Dart API Docs
+        run: dart doc .
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install Docusaurus dependencies
+        working-directory: ./website
+        run: npm ci
+
+      - name: Build Docusaurus site
+        working-directory: ./website
+        run: npm run build
+
+      - name: Merge API Docs into Docusaurus build
+        run: |
+          mkdir -p website/build/api
+          cp -r doc/api/* website/build/api/
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./website/build
+          commit_message: 'docs: auto-deploy institution site [skip ci]'

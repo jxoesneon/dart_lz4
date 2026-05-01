@@ -1,0 +1,47 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root {
+  /* Enterprise Typography */
+  --ifm-font-family-base: 'Inter', system-ui, sans-serif;
+  --ifm-font-family-monospace: 'JetBrains Mono', monospace;
+
+  /* The Trust Palette: Electric Emerald Green Accent */
+  --ifm-color-primary: #10b981;
+  --ifm-color-primary-dark: #0e9f6e;
+  --ifm-color-primary-darker: #0d9668;
+  --ifm-color-primary-darkest: #0a7c56;
+  --ifm-color-primary-light: #30c896;
+  --ifm-color-primary-lighter: #40cf9f;
+  --ifm-color-primary-lightest: #70dfbd;
+
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme='dark'] {
+  /* Enterprise Deep Dark Backgrounds */
+  --ifm-background-color: #0f172a; /* True deep-dark background */
+  --ifm-background-surface-color: #1e293b; /* Deep Slate Gray for cards/surfaces */
+  
+  --ifm-color-primary: #10b981;
+  --ifm-color-primary-dark: #0e9f6e;
+  --ifm-color-primary-darker: #0d9668;
+  --ifm-color-primary-darkest: #0a7c56;
+  --ifm-color-primary-light: #30c896;
+  --ifm-color-primary-lighter: #40cf9f;
+  --ifm-color-primary-lightest: #70dfbd;
+
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+}
+
+/* Callout Box Overrides for Enterprise aesthetic */
+.theme-admonition {
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  border: 1px solid var(--ifm-color-emphasis-200);
+}
+
+/* Crisp code blocks */
+code {
+  font-variant-ligatures: contextual;
+}
