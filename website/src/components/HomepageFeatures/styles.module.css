@@ -1,11 +1,83 @@
 .features {
   display: flex;
   align-items: center;
-  padding: 2rem 0;
+  padding: 4rem 0 8rem 0;
   width: 100%;
 }
 
-.featureSvg {
-  height: 200px;
-  width: 200px;
+.featureCard {
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 2rem;
+  height: 100%;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  position: relative;
+  overflow: hidden;
+}
+
+[data-theme='light'] .featureCard {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025);
+}
+
+.featureCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, transparent, var(--ifm-color-primary), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.featureCard:hover {
+  transform: translateY(-8px);
+  border-color: rgba(16, 185, 129, 0.3);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme='light'] .featureCard:hover {
+  border-color: rgba(16, 185, 129, 0.2);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.05);
+}
+
+.featureCard:hover::before {
+  opacity: 1;
+}
+
+.iconWrapper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--ifm-color-primary);
+  margin-bottom: 1.5rem;
+}
+
+[data-theme='light'] .iconWrapper {
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.featureTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--ifm-color-emphasis-900);
+}
+
+.featureDescription {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--ifm-color-emphasis-700);
+  margin: 0;
 }

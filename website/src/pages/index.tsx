@@ -11,22 +11,23 @@ import styles from './index.module.css';
 function HomepageHeader() {
   const {siteConfig} = useDocusaurusContext();
   return (
-    <header className={clsx('hero hero--primary', styles.heroBanner)} style={{ backgroundColor: 'var(--ifm-background-surface-color)' }}>
+    <header className={clsx('hero', styles.heroBanner)}>
+      <div className={styles.heroBackground} />
       <div className="container">
-        <Heading as="h1" className="hero__title">
+        <Heading as="h1" className={styles.hero__title}>
           {siteConfig.title}
         </Heading>
-        <p className="hero__subtitle">{siteConfig.tagline}</p>
+        <p className={styles.hero__subtitle}>
+          The reference standard for ultra-fast, zero-allocation LZ4 compression in pure Dart.
+        </p>
         <div className={styles.buttons}>
           <Link
-            className="button button--secondary button--lg"
-            to="/docs/intro"
-            style={{ color: 'var(--ifm-color-primary)', borderColor: 'var(--ifm-color-primary)', backgroundColor: 'transparent' }}>
+            className={clsx('button button--lg', styles.buttonPrimary)}
+            to="/docs/intro">
             Get Started
           </Link>
-          <span style={{ margin: '0 10px' }}></span>
           <Link
-            className="button button--primary button--lg"
+            className={clsx('button button--lg', styles.buttonSecondary)}
             to="pathname:///api/index.html">
             API Reference
           </Link>
