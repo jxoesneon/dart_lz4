@@ -5,50 +5,43 @@ import styles from './styles.module.css';
 
 type FeatureItem = {
   title: string;
-  Svg: React.ComponentType<React.ComponentProps<'svg'>>;
   description: ReactNode;
 };
 
 const FeatureList: FeatureItem[] = [
   {
-    title: 'Easy to Use',
-    Svg: require('@site/static/img/undraw_docusaurus_mountain.svg').default,
+    title: 'Guarded Wildcopy',
     description: (
       <>
-        Docusaurus was designed from the ground up to be easily installed and
-        used to get your website up and running quickly.
+        Optimized 8-byte chunk copying with a fast 32-bit fallback for Web environments. 
+        Enjoy native-like decompression speeds without sacrificing bounds safety or Web compatibility.
       </>
     ),
   },
   {
-    title: 'Focus on What Matters',
-    Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
+    title: 'Polymorphic Engine',
     description: (
       <>
-        Docusaurus lets you focus on your docs, and we&apos;ll do the chores. Go
-        ahead and move your docs into the <code>docs</code> directory.
+        Zero-allocation architecture designed to squeeze maximum performance out of the Dart VM (JIT/AOT). 
+        Extremely low garbage collection pressure for high-throughput streaming.
       </>
     ),
   },
   {
-    title: 'Powered by React',
-    Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
+    title: 'Reference Standard',
     description: (
       <>
-        Extend or customize your website layout by reusing React. Docusaurus can
-        be extended while reusing the same header and footer.
+        100% compliant with the official LZ4 block and frame specifications, including LZ4HC, 
+        skippable frames, legacy formats, and dictionary compression.
       </>
     ),
   },
 ];
 
-function Feature({title, Svg, description}: FeatureItem) {
+function Feature({title, description}: FeatureItem) {
   return (
     <div className={clsx('col col--4')}>
-      <div className="text--center">
-        <Svg className={styles.featureSvg} role="img" />
-      </div>
-      <div className="text--center padding-horiz--md">
+      <div className="text--center padding-horiz--md" style={{ marginTop: '2rem', marginBottom: '2rem' }}>
         <Heading as="h3">{title}</Heading>
         <p>{description}</p>
       </div>
