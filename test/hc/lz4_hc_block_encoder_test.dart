@@ -51,9 +51,9 @@ void main() {
     expect(roundTripHc(input), input);
   });
 
-  test('Lz4HcOptions validates maxSearchDepth', () {
-    expect(() => Lz4HcOptions(maxSearchDepth: 0), throwsA(isA<RangeError>()));
-    expect(() => Lz4HcOptions(maxSearchDepth: 1), returnsNormally);
+  test('Lz4HcOptions validates searchDepth', () {
+    expect(() => Lz4HcOptions(searchDepth: 0), throwsA(isA<RangeError>()));
+    expect(() => Lz4HcOptions(searchDepth: 1), returnsNormally);
   });
 
   test('lz4HcBlockCompress accepts options and round-trips', () {
@@ -61,7 +61,7 @@ void main() {
 
     final compressed = lz4HcBlockCompress(
       input,
-      options: Lz4HcOptions(maxSearchDepth: 8),
+      options: Lz4HcOptions(searchDepth: 8),
     );
 
     final out = lz4Decompress(compressed, decompressedSize: input.length);

@@ -97,7 +97,7 @@ final class PureDartLz4HcEngine implements Lz4CompressionEngine {
     final totalLength = input.length;
     final searchLimit = totalLength - 12;
 
-    final maxSearchDepth = options.effectiveSearchDepth;
+    final maxSearchDepth = options.searchDepth;
 
     while (i <= searchLimit) {
       var candidate = insert(i);
