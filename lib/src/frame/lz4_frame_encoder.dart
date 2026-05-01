@@ -4,6 +4,7 @@ import '../block/lz4_block_encoder.dart';
 import '../internal/byte_writer.dart';
 import '../internal/lz4_exception.dart';
 import '../xxhash/xxh32.dart';
+import '../internal/lz4_engine.dart';
 import 'lz4_engine_factory.dart';
 import 'lz4_frame_options.dart';
 
@@ -150,7 +151,13 @@ Uint8List lz4FrameEncodeBytesWithOptions(
 
   const historyWindow = 64 * 1024;
 
-  final engine = createLz4Engine(options);
+  // Optimization: Bypass engine abstraction for fast path
+  final Lz4CompressionEngine engine;
+  if (options.compression == Lz4FrameCompression.fast) {
+    engine = PureDartLz4FastEngine(acceleration: options.acceleration);
+  } else {
+    engine = createLz4Engine(options);
+  }
 
   var offset = 0;
   while (offset < src.length) {
