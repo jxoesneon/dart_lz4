@@ -1,16 +1,19 @@
 import type {ReactNode} from 'react';
 import clsx from 'clsx';
 import Heading from '@theme/Heading';
+import { ShieldCheck, Cpu, Library } from 'lucide-react';
 import styles from './styles.module.css';
 
 type FeatureItem = {
   title: string;
+  icon: ReactNode;
   description: ReactNode;
 };
 
 const FeatureList: FeatureItem[] = [
   {
     title: 'Guarded Wildcopy',
+    icon: <ShieldCheck size={24} strokeWidth={2} />,
     description: (
       <>
         Optimized 8-byte chunk copying with a fast 32-bit fallback for Web environments. 
@@ -20,6 +23,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: 'Polymorphic Engine',
+    icon: <Cpu size={24} strokeWidth={2} />,
     description: (
       <>
         Zero-allocation architecture designed to squeeze maximum performance out of the Dart VM (JIT/AOT). 
@@ -29,6 +33,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: 'Reference Standard',
+    icon: <Library size={24} strokeWidth={2} />,
     description: (
       <>
         100% compliant with the official LZ4 block and frame specifications, including LZ4HC, 
@@ -38,12 +43,15 @@ const FeatureList: FeatureItem[] = [
   },
 ];
 
-function Feature({title, description}: FeatureItem) {
+function Feature({title, icon, description}: FeatureItem) {
   return (
-    <div className={clsx('col col--4')}>
-      <div className="text--center padding-horiz--md" style={{ marginTop: '2rem', marginBottom: '2rem' }}>
-        <Heading as="h3">{title}</Heading>
-        <p>{description}</p>
+    <div className={clsx('col col--4', 'margin-bottom--lg')}>
+      <div className={styles.featureCard}>
+        <div className={styles.iconWrapper}>
+          {icon}
+        </div>
+        <Heading as="h3" className={styles.featureTitle}>{title}</Heading>
+        <p className={styles.featureDescription}>{description}</p>
       </div>
     </div>
   );
