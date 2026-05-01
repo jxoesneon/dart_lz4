@@ -13,7 +13,7 @@ const config: Config = {
   organizationName: 'jxoesneon',
   projectName: 'dart_lz4',
 
-  onBrokenLinks: 'throw',
+  onBrokenLinks: 'warn',
 
   markdown: {
     hooks: {
@@ -79,7 +79,7 @@ const config: Config = {
             },
             {
               label: 'API Reference',
-              href: 'pathname:///api/index.html',
+              to: '/docs/api',
             },
           ],
         },

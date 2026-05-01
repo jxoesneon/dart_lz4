@@ -28,7 +28,7 @@ function HomepageHeader() {
           </Link>
           <Link
             className={clsx('button button--lg', styles.buttonSecondary)}
-            to="pathname:///api/index.html">
+            to="/docs/api">
             API Reference
           </Link>
         </div>
