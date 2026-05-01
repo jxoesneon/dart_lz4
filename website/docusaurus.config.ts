@@ -74,7 +74,7 @@ const config: Config = {
             },
             {
               label: 'API Reference',
-              to: '/docs/api',
+              href: 'pathname:///api/index.html',
             },
           ],
         },
