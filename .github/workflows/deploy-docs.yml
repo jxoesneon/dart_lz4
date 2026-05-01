@@ -28,10 +28,18 @@ jobs:
       - name: Install Dart dependencies
         run: dart pub get
 
-      - name: Generate Dart API Docs
+      - name: Generate Dart API Docs (Deep Markdown)
         run: |
-          dart doc .
-          cat website/api_custom.css >> doc/api/static-assets/styles.css
+          dart pub global activate dartdoc_vitepress
+          # Fix missing .gitignore in pub cache that crashes dartdoc_vitepress
+          mkdir -p /home/runner/.pub-cache/hosted/pub.dev/dartdoc_vitepress-1.2.1/lib/resources/vitepress
+          touch /home/runner/.pub-cache/hosted/pub.dev/dartdoc_vitepress-1.2.1/lib/resources/vitepress/.gitignore
+          
+          dart pub global run dartdoc_vitepress:dartdoc_vitepress --format vitepress --output website/docs/api
+          
+          # Clean up and fix MDX for Docusaurus
+          cd website
+          node fix-mdx.js
         
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -47,11 +55,6 @@ jobs:
       - name: Build Docusaurus site
         working-directory: ./website
         run: npm run build
-
-      - name: Merge API Docs into Docusaurus build
-        run: |
-          mkdir -p website/build/api
-          cp -r doc/api/* website/build/api/
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
