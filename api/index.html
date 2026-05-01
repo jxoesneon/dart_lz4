@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1, user-scalable=no">
+  <meta name="description" content="dart_lz4 API docs, for the Dart programming language.">
+  <title>dart_lz4 - Dart API docs</title>
+
+
+  
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
+  
+  <link rel="stylesheet" href="static-assets/github.css?v1">
+  <link rel="stylesheet" href="static-assets/styles.css?v1">
+  <link rel="icon" href="static-assets/favicon.png?v1">
+  
+</head>
+
+<body data-base-href="" data-using-base-href="false" class="light-theme">
+<div id="overlay-under-drawer"></div>
+<header id="title">
+  <span id="sidenav-left-toggle" class="material-symbols-outlined" role="button" tabindex="0">menu</span>
+  <ol class="breadcrumbs gt-separated dark hidden-xs">
+    <li class="self-crumb">dart_lz4 package</li>
+  </ol>
+  <div class="self-name">dart_lz4</div>
+  <form class="search navbar-right" role="search">
+    <input type="text" id="search-box" autocomplete="off" disabled class="form-control typeahead" placeholder="Loading search...">
+  </form>
+  <button class="toggle" id="theme-button" title="Toggle between light and dark mode" aria-label="Light and dark mode toggle">
+    <span id="dark-theme-button" class="material-symbols-outlined" aria-hidden="true">
+      dark_mode
+    </span>
+    <span id="light-theme-button" class="material-symbols-outlined" aria-hidden="true">
+      light_mode
+    </span>
+  </button>
+</header>
+<main>
+  <div id="dartdoc-main-content" class="main-content">
+      
+<section class="desc markdown">
+  <h1 id="dart_lz4">dart_lz4</h1>
+<p><a href="https://github.com/jxoesneon/dart_lz4/actions/workflows/ci.yml"><img src="https://github.com/jxoesneon/dart_lz4/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+<a href="docs/OSSF_BEST_PRACTICES.md"><img src="https://bestpractices.coreinfrastructure.org/projects/9999/badge" alt="OpenSSF Best Practices"></a>
+<a href="https://github.com/jxoesneon/dart_lz4/actions/workflows/fuzzing.yml"><img src="https://github.com/jxoesneon/dart_lz4/actions/workflows/fuzzing.yml/badge.svg" alt="Fuzzing Status"></a></p>
+<p>Pure Dart implementation of LZ4 (block + frame) and LZ4HC, including streaming frame encode/decode.</p>
+<p>📚 <strong><a href="https://jxoesneon.github.io/dart_lz4/">Read the Official Documentation</a></strong></p>
+<p>Repository: <a href="https://github.com/jxoesneon/dart_lz4">github.com/jxoesneon/dart_lz4</a></p>
+<h2 id="status">Status</h2>
+<p>This package provides a <strong>feature-complete</strong> pure Dart implementation of the LZ4 frame format.</p>
+<p>Implemented:</p>
+<ul>
+<li>LZ4 block encode/decode</li>
+<li>LZ4 frame encode/decode (including skippable and legacy frames)</li>
+<li>Streaming frame encode/decode (<code>StreamTransformer</code>)</li>
+<li>LZ4HC block compression</li>
+<li>Dictionary support (encode + decode)</li>
+<li>64-bit content size (encode + decode)</li>
+<li>xxHash32 with VM + Web parity</li>
+</ul>
+<h2 id="goals">Goals</h2>
+<ul>
+<li>Pure Dart (no FFI)</li>
+<li>Web-safe core (no <code>dart:io</code> in library code)</li>
+<li>Strict, bounds-safe decoding with deterministic errors</li>
+<li>Streaming-friendly APIs with output limits</li>
+<li>Compatibility with LZ4 frame format (current)</li>
+</ul>
+<h2 id="limitations">Limitations</h2>
+<p>None. This package provides complete encode/decode support for all LZ4 frame formats.</p>
+<h2 id="security--untrusted-input">Security / untrusted input</h2>
+<ul>
+<li>Always set a reasonable <code>maxOutputBytes</code> when decoding frames (<code>lz4FrameDecode</code> / <code>lz4FrameDecoder</code>) to mitigate decompression bombs.</li>
+<li>Use <code>blockChecksum</code> and/or <code>contentChecksum</code> when encoding if you want corruption detection. These checksums are <strong>not</strong> cryptographic authentication.</li>
+<li>For block decompression (<code>lz4Decompress</code>), <code>decompressedSize</code> must be known and trusted/validated.</li>
+</ul>
+<h2 id="interop--compatibility">Interop / compatibility</h2>
+<p>Tested against the reference <code>lz4</code> CLI (<code>lz4 v1.10.0</code>) via embedded decode vectors and a CLI decode test.</p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Decode</th>
+<th>Encode</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Current LZ4 frame (magic <code>0x184D2204</code>)</td>
+<td>Yes</td>
+<td>Yes</td>
+<td></td>
+</tr>
+<tr>
+<td>Concatenated frames</td>
+<td>Yes</td>
+<td>N/A</td>
+<td>You can concatenate multiple encoded frames yourself.</td>
+</tr>
+<tr>
+<td>Skippable frames (magic <code>0x184D2A5x</code>)</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Skipped on decode; use <code>lz4SkippableEncode</code> to create.</td>
+</tr>
+<tr>
+<td>Independent blocks (<code>blockIndependence: true</code>)</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Default.</td>
+</tr>
+<tr>
+<td>Dependent blocks (<code>blockIndependence: false</code>)</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Uses a 64KiB history window.</td>
+</tr>
+<tr>
+<td>Block checksum</td>
+<td>Yes</td>
+<td>Yes</td>
+<td></td>
+</tr>
+<tr>
+<td>Content checksum</td>
+<td>Yes</td>
+<td>Yes</td>
+<td></td>
+</tr>
+<tr>
+<td>Content size (&lt;= 4GiB)</td>
+<td>Yes</td>
+<td>Yes</td>
+<td></td>
+</tr>
+<tr>
+<td>Content size (&gt; 4GiB)</td>
+<td>Yes</td>
+<td>Yes</td>
+<td></td>
+</tr>
+<tr>
+<td>Dictionary ID (<code>dictId</code>)</td>
+<td>Yes</td>
+<td>Yes</td>
+<td></td>
+</tr>
+<tr>
+<td>Legacy <code>-l</code> format</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Use <code>lz4LegacyEncode</code> for legacy frame magic <code>0x184C2102</code>.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="usage">Usage</h2>
+<h3 id="block">Block</h3>
+<p>Block decompression requires the decompressed size.</p>
+<pre class="language-dart"><code class="language-dart">import 'dart:typed_data';
+import 'package:dart_lz4/dart_lz4.dart';
+
+final src = Uint8List.fromList('hello'.codeUnits);
+final compressed = lz4Compress(src);
+final decoded = lz4Decompress(compressed, decompressedSize: src.length);
+</code></pre>
+<h3 id="lz4hc">LZ4HC</h3>
+<pre class="language-dart"><code class="language-dart">final compressed = lz4Compress(
+  src,
+  level: Lz4CompressionLevel.hc,
+  hcOptions: Lz4HcOptions(maxSearchDepth: 64), // Optional tuning
+);
+</code></pre>
+<h3 id="frame">Frame</h3>
+<pre class="language-dart"><code class="language-dart">final frame = lz4FrameEncode(src);
+final decoded = lz4FrameDecode(frame);
+</code></pre>
+<h3 id="frame-with-options">Frame with options</h3>
+<pre class="language-dart"><code class="language-dart">final frame = lz4FrameEncodeWithOptions(
+  src,
+  options: Lz4FrameOptions(
+    blockSize: Lz4FrameBlockSize.k64KB,
+    blockChecksum: true,
+    contentChecksum: true,
+    contentSize: src.length,
+    compression: Lz4FrameCompression.fast,
+    acceleration: 1,
+  ),
+);
+final decoded = lz4FrameDecode(frame);
+</code></pre>
+<p>Dependent blocks are supported by setting <code>blockIndependence: false</code>. When enabled,
+blocks may reference up to 64KiB of history from prior blocks.</p>
+<h3 id="frame-inspection">Frame Inspection</h3>
+<p>Inspect a frame header without decoding the payload:</p>
+<pre class="language-dart"><code class="language-dart">final info = lz4FrameInfo(frameBytes);
+print('Content Size: ${info.contentSize}');
+print('Dictionary ID: ${info.dictId}');
+</code></pre>
+<h3 id="dictionary-support">Dictionary Support</h3>
+<p>To decode frames that use a preset dictionary (identified by <code>dictId</code>):</p>
+<pre class="language-dart"><code class="language-dart">final decoded = lz4FrameDecode(
+  frameBytes,
+  dictionaryResolver: (dictId) {
+    if (dictId == 0x123456) return myDictionaryBytes;
+    return null; // Dictionary not found
+  },
+);
+</code></pre>
+<h3 id="skippable-frames">Skippable Frames</h3>
+<p>Embed custom metadata in an LZ4 stream using skippable frames:</p>
+<pre class="language-dart"><code class="language-dart">import 'dart:convert';
+
+final metadata = Uint8List.fromList(utf8.encode('{"version": 1}'));
+final skippable = lz4SkippableEncode(metadata, index: 0);
+
+// Concatenate with a regular frame
+final combined = Uint8List.fromList([...skippable, ...lz4FrameEncode(data)]);
+
+// Decoders will skip the metadata and decode only the payload
+final decoded = lz4FrameDecode(combined);
+</code></pre>
+<h3 id="legacy-frames">Legacy Frames</h3>
+<p>Encode data using the legacy LZ4 format (compatible with <code>lz4 -l</code>):</p>
+<pre class="language-dart"><code class="language-dart">final frame = lz4LegacyEncode(src);
+final decoded = lz4FrameDecode(frame);
+</code></pre>
+<h3 id="sized-blocks">Sized Blocks</h3>
+<p>Simple helper for block compression with prepended 4-byte length header:</p>
+<pre class="language-dart"><code class="language-dart">final compressed = lz4CompressWithSize(src);
+final decoded = lz4DecompressWithSize(compressed);
+</code></pre>
+<h3 id="streaming-frame-decode">Streaming frame decode</h3>
+<pre class="language-dart"><code class="language-dart">final decodedChunks = byteChunksStream.transform(
+  lz4FrameDecoder(maxOutputBytes: 128 * 1024 * 1024),
+);
+</code></pre>
+<h3 id="streaming-frame-encode">Streaming frame encode</h3>
+<pre class="language-dart"><code class="language-dart">final encodedChunks = byteChunksStream.transform(
+  lz4FrameEncoder(),
+);
+</code></pre>
+<p>Streaming encoding also supports <code>Lz4FrameOptions</code>:</p>
+<pre class="language-dart"><code class="language-dart">final encodedChunks = byteChunksStream.transform(
+  lz4FrameEncoderWithOptions(
+    options: Lz4FrameOptions(
+      blockSize: Lz4FrameBlockSize.k64KB,
+      blockIndependence: false,
+    ),
+  ),
+);
+</code></pre>
+<h2 id="benchmarks">Benchmarks</h2>
+<p>Run:</p>
+<pre class="language-sh"><code class="language-sh">dart run benchmark/lz4_benchmark.dart
+</code></pre>
+<p>It reports throughput (MiB/s) and ratio for:</p>
+<ul>
+<li><strong>Block</strong> compress/decompress (fast + hc)</li>
+<li><strong>Frame (sync)</strong> encode/decode (fast + hc)</li>
+<li><strong>Frame (streaming)</strong> encode/decode (fast + hc)</li>
+</ul>
+<h2 id="license">License</h2>
+<p>Apache-2.0. See <code>LICENSE</code>.</p>
+</section>
+
+
+      <section class="summary">
+          <h2>Libraries</h2>
+        <dl>
+          <dt id="dart_lz4">
+  <span class="name"><a href="dart_lz4/">dart_lz4</a></span> 
+
+</dt>
+<dd>Pure Dart LZ4 and LZ4HC APIs.
+</dd>
+
+        </dl>
+      </section>
+  </div> <!-- /.main-content -->
+  <div id="dartdoc-sidebar-left" class="sidebar sidebar-offcanvas-left">
+    <!-- The search input and breadcrumbs below are only responsively visible at low resolutions. -->
+<header id="header-search-sidebar" class="hidden-l">
+  <form class="search-sidebar" role="search">
+    <input type="text" id="search-sidebar" autocomplete="off" disabled class="form-control typeahead" placeholder="Loading search...">
+  </form>
+</header>
+<ol class="breadcrumbs gt-separated dark hidden-l" id="sidebar-nav">
+    <li class="self-crumb">dart_lz4 package</li>
+</ol>
+
+    <h5 class="hidden-xs"><span class="package-name">dart_lz4</span> <span class="package-kind">package</span></h5>
+    <ol>
+      <li class="section-title">Libraries</li>
+      <li><a href="dart_lz4/">dart_lz4</a></li>
+</ol>
+
+  </div>
+  <div id="dartdoc-sidebar-right" class="sidebar sidebar-offcanvas-right">
+  </div>
+</main>
+<footer>
+  <span class="no-break">
+    dart_lz4
+      1.2.0
+  </span>
+  
+</footer>
+
+
+<script src="static-assets/highlight.pack.js?v1"></script>
+<script src="static-assets/docs.dart.js"></script>
+
+</body>
+</html>
+

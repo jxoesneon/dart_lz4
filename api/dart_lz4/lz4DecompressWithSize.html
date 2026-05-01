@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1, user-scalable=no">
+  <meta name="description" content="API docs for the lz4DecompressWithSize function from the dart_lz4 library, for the Dart programming language.">
+  <title>lz4DecompressWithSize function - dart_lz4 library - Dart API</title>
+
+
+  
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
+  
+  <link rel="stylesheet" href="../static-assets/github.css?v1">
+  <link rel="stylesheet" href="../static-assets/styles.css?v1">
+  <link rel="icon" href="../static-assets/favicon.png?v1">
+  
+</head>
+
+<body data-base-href="../" data-using-base-href="false" class="light-theme">
+<div id="overlay-under-drawer"></div>
+<header id="title">
+  <span id="sidenav-left-toggle" class="material-symbols-outlined" role="button" tabindex="0">menu</span>
+  <ol class="breadcrumbs gt-separated dark hidden-xs">
+    <li><a href="../index.html">dart_lz4</a></li>
+    <li><a href="../dart_lz4/">dart_lz4.dart</a></li>
+    <li class="self-crumb">lz4DecompressWithSize function</li>
+  </ol>
+  <div class="self-name">lz4DecompressWithSize</div>
+  <form class="search navbar-right" role="search">
+    <input type="text" id="search-box" autocomplete="off" disabled class="form-control typeahead" placeholder="Loading search...">
+  </form>
+  <button class="toggle" id="theme-button" title="Toggle between light and dark mode" aria-label="Light and dark mode toggle">
+    <span id="dark-theme-button" class="material-symbols-outlined" aria-hidden="true">
+      dark_mode
+    </span>
+    <span id="light-theme-button" class="material-symbols-outlined" aria-hidden="true">
+      light_mode
+    </span>
+  </button>
+</header>
+<main>
+  <div
+      id="dartdoc-main-content"
+      class="main-content"
+      data-above-sidebar="dart_lz4&#47;dart_lz4-library-sidebar.html"
+      data-below-sidebar="">
+      <div>
+<h1><span class="kind-function">lz4DecompressWithSize</span> function 
+ 
+</h1></div>
+
+    <section class="multi-line-signature">
+        
+<span class="returntype"><a href="https://api.dart.dev/stable/3.11.5/dart-typed_data/Uint8List-class.html">Uint8List</a></span>
+<span class="name ">lz4DecompressWithSize</span>(<wbr><ol class="parameter-list"> <li><span class="parameter" id="lz4DecompressWithSize-param-src"><span class="type-annotation"><a href="https://api.dart.dev/stable/3.11.5/dart-typed_data/Uint8List-class.html">Uint8List</a></span> <span class="parameter-name">src</span>, {</span></li>
+<li><span class="parameter" id="lz4DecompressWithSize-param-maxDecompressedSize"><span class="type-annotation"><a href="https://api.dart.dev/stable/3.11.5/dart-core/int-class.html">int</a>?</span> <span class="parameter-name">maxDecompressedSize</span>, </span></li>
+</ol>})
+
+        
+
+    </section>
+    
+<section class="desc markdown">
+  <p>Decompresses an LZ4 block that was compressed with <a href="../dart_lz4/lz4CompressWithSize.html">lz4CompressWithSize</a>.</p>
+<p>Reads the prepended 4-byte decompressed size and uses it to decompress the
+remaining data.</p>
+<p>If <code>maxDecompressedSize</code> is provided, throws <a href="../dart_lz4/Lz4FormatException-class.html">Lz4FormatException</a> if the
+header size exceeds the limit.</p>
+<p>Throws <a href="../dart_lz4/Lz4FormatException-class.html">Lz4FormatException</a> if <code>src</code> is too short.</p>
+</section>
+
+
+    
+<section class="summary source-code" id="source">
+  <h2><span>Implementation</span></h2>
+  <pre class="language-dart"><code class="language-dart">Uint8List lz4DecompressWithSize(Uint8List src, {int? maxDecompressedSize}) {
+  if (src.length &lt; 4) {
+    throw const Lz4FormatException(&#39;Input too short for size header&#39;);
+  }
+
+  final view = ByteData.view(src.buffer, src.offsetInBytes, src.length);
+  final decompressedSize = view.getUint32(0, Endian.little);
+
+  if (maxDecompressedSize != null &amp;&amp; decompressedSize &gt; maxDecompressedSize) {
+    throw Lz4FormatException(
+        &#39;Decompressed size ($decompressedSize) from header exceeds maxDecompressedSize ($maxDecompressedSize)&#39;);
+  }
+
+  &#47;&#47; We use sublistView to avoid copying the compressed data again,
+  &#47;&#47; passing a view to the decoder.
+  final compressedData = Uint8List.sublistView(src, 4);
+
+  return lz4Decompress(
+    compressedData,
+    decompressedSize: decompressedSize,
+  );
+}</code></pre>
+</section>
+
+
+  </div> <!-- /.main-content -->
+  <div id="dartdoc-sidebar-left" class="sidebar sidebar-offcanvas-left">
+    <!-- The search input and breadcrumbs below are only responsively visible at low resolutions. -->
+<header id="header-search-sidebar" class="hidden-l">
+  <form class="search-sidebar" role="search">
+    <input type="text" id="search-sidebar" autocomplete="off" disabled class="form-control typeahead" placeholder="Loading search...">
+  </form>
+</header>
+<ol class="breadcrumbs gt-separated dark hidden-l" id="sidebar-nav">
+    <li><a href="../index.html">dart_lz4</a></li>
+    <li><a href="../dart_lz4/">dart_lz4</a></li>
+    <li class="self-crumb">lz4DecompressWithSize function</li>
+</ol>
+
+    <h5>dart_lz4 library</h5>
+    <div id="dartdoc-sidebar-left-content"></div>
+  </div><!--/.sidebar-offcanvas-left-->
+  <div id="dartdoc-sidebar-right" class="sidebar sidebar-offcanvas-right">
+  </div><!--/.sidebar-offcanvas-->
+</main>
+<footer>
+  <span class="no-break">
+    dart_lz4
+      1.2.0
+  </span>
+  
+</footer>
+
+
+<script src="../static-assets/highlight.pack.js?v1"></script>
+<script src="../static-assets/docs.dart.js"></script>
+
+</body>
+</html>
+
