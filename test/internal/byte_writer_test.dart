@@ -77,4 +77,80 @@ void main() {
     w.writeBytes(Uint8List.fromList([1, 2, 3]));
     expect(() => w.writeUint8(4), throwsA(isA<Lz4OutputLimitException>()));
   });
+
+  group('ByteWriter.forBuffer', () {
+    test('writes directly into pre-allocated buffer', () {
+      final buffer = Uint8List(10);
+      final w = ByteWriter.forBuffer(buffer, offset: 2);
+      expect(w.isFixed, isTrue);
+      expect(w.length, 2);
+      expect(w.blockStartOffset, 2);
+
+      w.writeUint8(0xab);
+      w.writeUint8(0xcd);
+      expect(w.length, 4);
+      expect(buffer[2], 0xab);
+      expect(buffer[3], 0xcd);
+    });
+
+    test(
+        'throws Lz4OutputLimitException Destination buffer too small on overflow',
+        () {
+      final buffer = Uint8List(4);
+      final w = ByteWriter.forBuffer(buffer);
+
+      w.writeBytes(Uint8List.fromList([1, 2, 3, 4]));
+      expect(
+        () => w.writeUint8(5),
+        throwsA(
+          isA<Lz4OutputLimitException>().having(
+            (e) => e.message,
+            'message',
+            contains('Destination buffer too small'),
+          ),
+        ),
+      );
+      // Ensures buffer was never reallocated and directly shares storage
+      expect(w.length, 4);
+      buffer[0] = 0x99;
+      expect(w.bytesView()[0], 0x99);
+    });
+
+    test('enforces offset bounds in constructor', () {
+      final buffer = Uint8List(5);
+      expect(() => ByteWriter.forBuffer(buffer, offset: -1), throwsRangeError);
+      expect(() => ByteWriter.forBuffer(buffer, offset: 6), throwsRangeError);
+      // offset == buffer.length is valid (empty remaining)
+      final w = ByteWriter.forBuffer(buffer, offset: 5);
+      expect(w.length, 5);
+      expect(() => w.writeUint8(1), throwsA(isA<Lz4OutputLimitException>()));
+    });
+
+    test('copyMatch cannot read prior to blockStartOffset', () {
+      final buffer = Uint8List(10);
+      // Pre-fill buffer with dummy data that shouldn't be accessible
+      buffer.setRange(0, 5, [0xde, 0xad, 0xbe, 0xef, 0xaa]);
+
+      final w = ByteWriter.forBuffer(buffer, offset: 5);
+      expect(w.blockStartOffset, 5);
+
+      // Writing 2 bytes in the block
+      w.writeBytes(Uint8List.fromList([1, 2]));
+      expect(w.length, 7);
+
+      // Valid match: distance 2 stays within block (reads from index 5)
+      w.copyMatch(2, 2);
+      expect(w.length, 9);
+      expect(buffer[7], 1);
+      expect(buffer[8], 2);
+
+      // Invalid match: distance 5 from length 9 would attempt reading index 4 (before blockStartOffset 5)
+      expect(() => w.copyMatch(5, 1), throwsA(isA<Lz4CorruptDataException>()));
+
+      // Distance matching exact block length (4) is valid (reads index 5)
+      w.copyMatch(4, 1);
+      expect(w.length, 10);
+      expect(buffer[9], 1);
+    });
+  });
 }

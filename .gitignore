@@ -7,7 +7,8 @@
 .packages
 .pub/
 build/
-coverage/
+/coverage/
+/coverage_chrome/
 doc/
 # Package lockfiles are typically not checked in for libraries
 pubspec.lock

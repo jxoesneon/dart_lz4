@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import '../block/lz4_block_decoder.dart';
 import '../internal/byte_reader.dart';
 import '../internal/byte_writer.dart';
+import '../internal/lz4_buffer_pool.dart';
 import '../internal/lz4_exception.dart';
 import '../xxhash/xxh32.dart';
 import 'lz4_frame_options.dart';
@@ -16,6 +17,7 @@ Uint8List lz4FrameDecodeBytes(
   Uint8List src, {
   int? maxOutputBytes,
   Lz4DictionaryResolver? dictionaryResolver,
+  Lz4BufferPool? bufferPool,
 }) {
   // If maxOutputBytes is omitted, we use a default limit of 256MB to prevent
   // decompression bombs from exhausting memory. Users can override this by
@@ -25,6 +27,7 @@ Uint8List lz4FrameDecodeBytes(
     src,
     maxOutputBytes: maxOutputBytes ?? defaultMaxOutputBytes,
     dictionaryResolver: dictionaryResolver,
+    bufferPool: bufferPool,
   ).decodeAll();
 }
 
@@ -41,16 +44,21 @@ final class _Lz4FrameDecoder {
     this._src, {
     int? maxOutputBytes,
     Lz4DictionaryResolver? dictionaryResolver,
+    Lz4BufferPool? bufferPool,
   })  : _reader = ByteReader(_src),
-        _out = ByteWriter(maxLength: maxOutputBytes),
+        _out = ByteWriter(maxLength: maxOutputBytes, bufferPool: bufferPool),
         _maxOutputBytes = maxOutputBytes,
         _dictionaryResolver = dictionaryResolver;
 
   Uint8List decodeAll() {
-    while (!_reader.isEOF) {
-      _decodeNextFrameOrSkippable();
+    try {
+      while (!_reader.isEOF) {
+        _decodeNextFrameOrSkippable();
+      }
+      return _out.toBytes();
+    } finally {
+      _out.release();
     }
-    return _out.toBytes();
   }
 
   void _decodeNextFrameOrSkippable() {

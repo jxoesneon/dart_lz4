@@ -9,6 +9,9 @@ tool/
 test/
 doc/
 docs/
+website/
+coverage/
+fuzz/
 
 # Dart tooling
 .dart_tool/

@@ -53,9 +53,7 @@ final class Xxh32 {
     }
 
     final nextLen = _totalLen + length;
-    if (identical(0, 0.0) && nextLen > 9007199254740991) {
-      throw UnsupportedError('xxhash32 precision loss on Web');
-    }
+    checkWebPrecision(nextLen);
     _totalLen = nextLen;
 
     if (_memSize + length < 16) {
@@ -220,6 +218,9 @@ int xxh32(Uint8List input, {int seed = 0}) {
 
   return h32.toUnsigned(32);
 }
+
+/// Convenience helper to compute xxHash32 digest for [input] with optional [seed].
+int xxh32Digest(Uint8List input, {int seed = 0}) => xxh32(input, seed: seed);
 
 int _round(int acc, int input) {
   acc = (acc + mul32(input, _prime32_2)).toUnsigned(32);
