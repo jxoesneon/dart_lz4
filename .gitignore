@@ -1,6 +1,7 @@
 # Local workspace / tooling
 .windsurf/
 .fastembed_cache/
+.playwright-mcp/
 
 # Dart / pub
 .dart_tool/
