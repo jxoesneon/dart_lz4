@@ -1,5 +1,6 @@
 # Local workspace / tooling
 .windsurf/
+.fastembed_cache/
 
 # Dart / pub
 .dart_tool/
