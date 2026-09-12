@@ -184,34 +184,8 @@ Uint8List lz4FrameEncodeBytesWithOptions(
       // part of the external dictionary with the start of src.
       if (offset == 0) {
         blockDict = dictionary;
-      } else if (offset >= historyWindow) {
-        // We have enough history in src itself.
-        blockDict = Uint8List.sublistView(src, offset - historyWindow, offset);
       } else {
-        // Mixed history: some from external dict (if any), some from src.
-        // We need 64KB total history.
-        // Available from src: 'offset' bytes.
-        // Needed from dict: historyWindow - offset.
-        final dictLen = dictionary?.length ?? 0;
-        if (dictLen == 0) {
-          blockDict = Uint8List.sublistView(src, 0, offset);
-        } else {
-          final neededFromDict = historyWindow - offset;
-          final takeFromDict =
-              dictLen > neededFromDict ? neededFromDict : dictLen;
-          // We need to construct a combined dictionary buffer.
-          // This is expensive (allocation), but necessary for correct compression
-          // of the boundary region with dependent blocks + external dictionary.
-          final combined = Uint8List(takeFromDict + offset);
-          combined.setRange(
-              0,
-              takeFromDict,
-              Uint8List.sublistView(
-                  dictionary!, dictLen - takeFromDict, dictLen));
-          combined.setRange(takeFromDict, combined.length,
-              Uint8List.sublistView(src, 0, offset));
-          blockDict = combined;
-        }
+        blockDict = Uint8List.sublistView(src, offset - historyWindow, offset);
       }
     }
 

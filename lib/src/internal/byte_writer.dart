@@ -1,30 +1,71 @@
 import 'dart:typed_data';
 
+import '_wildcopy_stub.dart'
+    if (dart.library.io) '_wildcopy_vm.dart'
+    if (dart.library.js_interop) '_wildcopy_web.dart'
+    if (dart.library.html) '_wildcopy_web.dart';
 import 'lz4_buffer_pool.dart';
 import 'lz4_exception.dart';
 
 final class ByteWriter {
   Uint8List _buffer;
   int _length;
+  int _blockStartOffset;
   final int? _maxLength;
   final Lz4BufferPool? _bufferPool;
+  final bool _isFixed;
 
   ByteWriter({
     int initialCapacity = 0,
     int? maxLength,
     Lz4BufferPool? bufferPool,
+    int blockStartOffset = 0,
   })  : _bufferPool = bufferPool,
         _buffer =
             bufferPool?.checkout(initialCapacity < 0 ? 0 : initialCapacity) ??
                 Uint8List(initialCapacity < 0 ? 0 : initialCapacity),
         _length = 0,
-        _maxLength = maxLength {
+        _blockStartOffset = blockStartOffset,
+        _maxLength = maxLength,
+        _isFixed = false {
     if (initialCapacity < 0) {
       throw RangeError.value(initialCapacity, 'initialCapacity');
     }
     if (maxLength != null && maxLength < 0) {
       throw RangeError.value(maxLength, 'maxLength');
     }
+    if (blockStartOffset < 0) {
+      throw RangeError.value(blockStartOffset, 'blockStartOffset');
+    }
+  }
+
+  ByteWriter.forBuffer(
+    Uint8List buffer, {
+    int offset = 0,
+    int? maxLength,
+  })  : _buffer = buffer,
+        _length = offset,
+        _blockStartOffset = offset,
+        _maxLength = maxLength,
+        _bufferPool = null,
+        _isFixed = true {
+    if (offset < 0 || offset > buffer.length) {
+      throw RangeError.range(offset, 0, buffer.length, 'offset');
+    }
+    if (maxLength != null && maxLength < 0) {
+      throw RangeError.value(maxLength, 'maxLength');
+    }
+  }
+
+  bool get isFixed => _isFixed;
+
+  int get blockStartOffset => _blockStartOffset;
+
+  set blockStartOffset(int offset) {
+    if (offset < 0 || offset > _length) {
+      throw RangeError.range(offset, 0, _length, 'blockStartOffset');
+    }
+    _blockStartOffset = offset;
   }
 
   int get length => _length;
@@ -43,7 +84,7 @@ final class ByteWriter {
   Uint8List toBytes() => _buffer.sublist(0, _length);
 
   void clear() {
-    _length = 0;
+    _length = _isFixed ? _blockStartOffset : 0;
   }
 
   /// Releases the internal buffer back to the pool if one is used.
@@ -109,11 +150,15 @@ final class ByteWriter {
     _length += count;
   }
 
-  void copyMatch(int distance, int matchLength) {
+  void copyMatch(int distance, int matchLength, [int? blockStartOffset]) {
     if (matchLength < 0) {
       throw RangeError.value(matchLength, 'matchLength');
     }
-    if (distance <= 0 || distance > _length) {
+    final start = blockStartOffset ?? _blockStartOffset;
+    if (start < 0 || start > _length) {
+      throw RangeError.range(start, 0, _length, 'blockStartOffset');
+    }
+    if (distance <= 0 || distance > _length - start) {
       throw const Lz4CorruptDataException('Invalid match distance');
     }
     if (matchLength == 0) {
@@ -139,33 +184,11 @@ final class ByteWriter {
     }
 
     var dest = destStart;
-    final isWeb = identical(0, 0.0);
 
-    if (distance >= 8 && matchLength >= 8) {
+    if (distance >= wildCopyMinDistance && matchLength >= wildCopyMinDistance) {
       final bd = ByteData.view(_buffer.buffer, _buffer.offsetInBytes);
-      if (isWeb) {
-        // Web: Use 32-bit wildcopy (Uint64 is unsupported)
-        final limit = end - 4;
-        while (dest <= limit) {
-          bd.setUint32(
-            dest,
-            bd.getUint32(dest - distance, Endian.little),
-            Endian.little,
-          );
-          dest += 4;
-        }
-      } else {
-        // VM: Use 64-bit wildcopy
-        final limit = end - 8;
-        while (dest <= limit) {
-          bd.setUint64(
-            dest,
-            bd.getUint64(dest - distance, Endian.little),
-            Endian.little,
-          );
-          dest += 8;
-        }
-      }
+      final limit = end - wildCopyLimitOffset;
+      dest = wildCopy(bd, dest, distance, limit);
     }
 
     for (; dest < end; dest++) {
@@ -178,11 +201,20 @@ final class ByteWriter {
   static const int _maxSafeCapacity = 0x7FFFFFFF; // 2GB
 
   void _ensureCapacity(int additional) {
-    if (additional < 0) {
-      throw RangeError.value(additional, 'additional');
-    }
+    assert(additional >= 0);
 
     final newLength = _length + additional;
+    if (_isFixed) {
+      if (newLength > _buffer.length) {
+        throw const Lz4OutputLimitException('Destination buffer too small');
+      }
+      final maxLen = _maxLength;
+      if (maxLen != null && newLength > maxLen) {
+        throw const Lz4OutputLimitException('Output limit exceeded');
+      }
+      return;
+    }
+
     final maxLength = _maxLength ?? _maxSafeCapacity;
     if (newLength > maxLength) {
       throw const Lz4OutputLimitException('Output limit exceeded');

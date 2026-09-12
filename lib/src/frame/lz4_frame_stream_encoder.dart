@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import '../internal/byte_writer.dart';
+import '../internal/lz4_buffer_pool.dart';
 import '../internal/lz4_exception.dart';
 import '../xxhash/xxh32.dart';
 import 'lz4_engine_factory.dart';
@@ -12,10 +13,12 @@ const _lz4FrameMagic = 0x184D2204;
 StreamTransformer<List<int>, List<int>> lz4FrameEncoderTransformer({
   int acceleration = 1,
   Uint8List? dictionary,
+  Lz4BufferPool? bufferPool,
 }) {
   return lz4FrameEncoderTransformerWithOptions(
     options: Lz4FrameOptions(
       acceleration: acceleration,
+      bufferPool: bufferPool,
     ),
     dictionary: dictionary,
   );
@@ -102,7 +105,10 @@ StreamTransformer<List<int>, List<int>> lz4FrameEncoderTransformerWithOptions({
       return Uint8List.sublistView(all, start, all.length);
     }
 
-    final blockWriter = ByteWriter(initialCapacity: blockMaxSize + 16);
+    final blockWriter = ByteWriter(
+      initialCapacity: blockMaxSize + 16,
+      bufferPool: options.bufferPool,
+    );
     final engine = createLz4Engine(options);
 
     Uint8List encodeBlock(Uint8List chunk, Uint8List? dictionary) {
@@ -138,82 +144,86 @@ StreamTransformer<List<int>, List<int>> lz4FrameEncoderTransformerWithOptions({
       }
     }
 
-    await for (final chunk in input) {
-      final bytes = chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
-      if (bytes.isEmpty) {
-        continue;
+    try {
+      await for (final chunk in input) {
+        final bytes = chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
+        if (bytes.isEmpty) {
+          continue;
+        }
+
+        totalIn += bytes.length;
+        if (contentSize != null && totalIn > contentSize) {
+          throw Lz4FormatException('contentSize does not match stream length');
+        }
+        if (contentHasher != null) {
+          contentHasher.update(bytes);
+        }
+
+        buf.add(bytes);
+        bufferedLen += bytes.length;
+
+        while (bufferedLen >= blockMaxSize) {
+          final all = buf.takeBytes();
+
+          final block = takeBlock(all, blockMaxSize);
+          final rest = takeRest(all, blockMaxSize);
+
+          if (rest.isNotEmpty) {
+            buf.add(rest);
+          }
+          bufferedLen = rest.length;
+
+          final Uint8List? dictToUse;
+          if (options.blockIndependence) {
+            dictToUse = dictionary;
+          } else {
+            dictToUse = (historyLen != 0)
+                ? Uint8List.sublistView(history, 0, historyLen)
+                : null;
+          }
+
+          yield encodeBlock(block, dictToUse);
+
+          if (!options.blockIndependence) {
+            appendHistory(block);
+          }
+        }
       }
 
-      totalIn += bytes.length;
-      if (contentSize != null && totalIn > contentSize) {
+      if (bufferedLen != 0) {
+        final remaining = buf.takeBytes();
+        bufferedLen = 0;
+        if (remaining.isNotEmpty) {
+          final Uint8List? dictToUse;
+          if (options.blockIndependence) {
+            dictToUse = dictionary;
+          } else {
+            dictToUse = (historyLen != 0)
+                ? Uint8List.sublistView(history, 0, historyLen)
+                : null;
+          }
+
+          yield encodeBlock(remaining, dictToUse);
+
+          if (!options.blockIndependence) {
+            appendHistory(remaining);
+          }
+        }
+      }
+
+      if (contentSize != null && totalIn != contentSize) {
         throw Lz4FormatException('contentSize does not match stream length');
       }
-      if (contentHasher != null) {
-        contentHasher.update(bytes);
+
+      yield Uint8List(4);
+
+      if (options.contentChecksum) {
+        final out = ByteWriter(initialCapacity: 4);
+        out.writeUint32LE(contentHasher!.digest());
+        yield out.toBytes();
       }
-
-      buf.add(bytes);
-      bufferedLen += bytes.length;
-
-      while (bufferedLen >= blockMaxSize) {
-        final all = buf.takeBytes();
-
-        final block = takeBlock(all, blockMaxSize);
-        final rest = takeRest(all, blockMaxSize);
-
-        if (rest.isNotEmpty) {
-          buf.add(rest);
-        }
-        bufferedLen = rest.length;
-
-        final Uint8List? dictToUse;
-        if (options.blockIndependence) {
-          dictToUse = dictionary;
-        } else {
-          dictToUse = (historyLen != 0)
-              ? Uint8List.sublistView(history, 0, historyLen)
-              : null;
-        }
-
-        yield encodeBlock(block, dictToUse);
-
-        if (!options.blockIndependence) {
-          appendHistory(block);
-        }
-      }
-    }
-
-    if (bufferedLen != 0) {
-      final remaining = buf.takeBytes();
-      bufferedLen = 0;
-      if (remaining.isNotEmpty) {
-        final Uint8List? dictToUse;
-        if (options.blockIndependence) {
-          dictToUse = dictionary;
-        } else {
-          dictToUse = (historyLen != 0)
-              ? Uint8List.sublistView(history, 0, historyLen)
-              : null;
-        }
-
-        yield encodeBlock(remaining, dictToUse);
-
-        if (!options.blockIndependence) {
-          appendHistory(remaining);
-        }
-      }
-    }
-
-    if (contentSize != null && totalIn != contentSize) {
-      throw Lz4FormatException('contentSize does not match stream length');
-    }
-
-    yield Uint8List(4);
-
-    if (options.contentChecksum) {
-      final out = ByteWriter(initialCapacity: 4);
-      out.writeUint32LE(contentHasher!.digest());
-      yield out.toBytes();
+    } finally {
+      blockWriter.release();
     }
   });
 }

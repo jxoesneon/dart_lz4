@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import '../hc/lz4_hc_options.dart';
+import '../internal/lz4_buffer_pool.dart';
 
 /// Callback to resolve a dictionary by its ID.
 ///
@@ -74,6 +75,9 @@ final class Lz4FrameOptions {
   /// Only used when [compression] is [Lz4FrameCompression.hc].
   final Lz4HcOptions? hcOptions;
 
+  /// Optional buffer pool for reusing byte allocations.
+  final Lz4BufferPool? bufferPool;
+
   /// Creates options for LZ4 frame encoding.
   Lz4FrameOptions({
     this.blockSize = Lz4FrameBlockSize.k4MB,
@@ -85,6 +89,7 @@ final class Lz4FrameOptions {
     this.compression = Lz4FrameCompression.fast,
     this.acceleration = 1,
     this.hcOptions,
+    this.bufferPool,
   }) {
     if (acceleration < 1) {
       throw RangeError.value(acceleration, 'acceleration');

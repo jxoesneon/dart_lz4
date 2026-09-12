@@ -75,6 +75,18 @@ final compressed = lz4Compress(src);
 final decoded = lz4Decompress(compressed, decompressedSize: src.length);
 ```
 
+### Zero-Copy Block Decompression
+
+Decompress directly into a pre-allocated buffer without intermediary allocations:
+
+```dart
+final dst = Uint8List(src.length);
+final bytesWritten = lz4DecompressInto(compressed, dst);
+
+// Or into an offset within a shared buffer:
+final offsetBytes = lz4DecompressInto(compressed, dst, dstOffset: 64);
+```
+
 ### LZ4HC
 
 ```dart
@@ -197,6 +209,26 @@ final encodedChunks = byteChunksStream.transform(
       blockIndependence: false,
     ),
   ),
+);
+```
+
+### Buffer Pooling
+
+Reuse allocations across streaming decode and encode workloads using power-of-two slab pools:
+
+```dart
+// Standard slab pool (64B to 8MB)
+final pool = SimpleLz4BufferPool(
+  maxTotalBuffers: 64,
+  maxBuffersPerBucket: 8,
+);
+
+// Secure zeroized pool (CWE-226 residual memory mitigation)
+final securePool = SecureLz4BufferPool();
+
+// Supply to streaming decoder or encoder
+final decodedStream = byteChunksStream.transform(
+  lz4FrameDecoder(bufferPool: pool),
 );
 ```
 

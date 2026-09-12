@@ -16,6 +16,8 @@ import 'src/frame/lz4_frame_options.dart'
     show Lz4FrameOptions, Lz4DictionaryResolver;
 
 export 'src/internal/lz4_exception.dart';
+export 'src/internal/lz4_buffer_pool.dart'
+    show Lz4BufferPool, SimpleLz4BufferPool, SecureLz4BufferPool;
 export 'src/block/lz4_sized_block.dart';
 export 'src/frame/lz4_frame_info.dart' show Lz4FrameInfo, lz4FrameInfo;
 export 'src/frame/lz4_frame_options.dart'
@@ -26,6 +28,7 @@ export 'src/frame/lz4_frame_options.dart'
         Lz4DictionaryResolver;
 export 'src/hc/lz4_hc_options.dart' show Lz4HcOptions, Lz4HcLevel;
 
+import 'src/internal/lz4_buffer_pool.dart';
 import 'src/block/lz4_block_decoder.dart';
 import 'src/block/lz4_block_encoder.dart';
 import 'src/frame/lz4_frame_decoder.dart';
@@ -78,18 +81,43 @@ Uint8List lz4Compress(
 /// If [maxDecompressedSize] is provided, throws [Lz4FormatException] if
 /// [decompressedSize] exceeds the limit.
 ///
+/// If [bufferPool] is provided, temporary buffers are recycled through the pool.
+///
 /// Throws an [Exception] if the input is malformed/truncated or if it attempts
 /// to write beyond the expected output size.
 Uint8List lz4Decompress(
   Uint8List src, {
   required int decompressedSize,
   int? maxDecompressedSize,
+  Lz4BufferPool? bufferPool,
 }) {
   return lz4BlockDecompress(
     src,
     decompressedSize: decompressedSize,
     maxDecompressedSize: maxDecompressedSize,
+    bufferPool: bufferPool,
   );
+}
+
+/// Decompresses an LZ4 *block* [src] directly into the pre-allocated [dst]
+/// buffer starting at [dstOffset].
+///
+/// Returns the number of decompressed bytes written to [dst].
+///
+/// This avoids allocating a new [Uint8List] on the heap, enabling zero-copy
+/// decompression workflows when combined with buffer pools or pre-allocated slabs.
+///
+/// Throws:
+/// - [RangeError] if [dstOffset] is outside `[0, dst.length]`.
+/// - [Lz4OutputLimitException] if [dst] has insufficient space for the decompressed data.
+/// - [Lz4CorruptDataException] if the block data is malformed or corrupted.
+/// - [Lz4FormatException] if the block format or tokens are invalid.
+int lz4DecompressInto(
+  Uint8List src,
+  Uint8List dst, {
+  int dstOffset = 0,
+}) {
+  return lz4BlockDecompressIntoBuffer(src, dst, dstOffset: dstOffset);
 }
 
 /// Encodes [src] as an LZ4 *frame*.

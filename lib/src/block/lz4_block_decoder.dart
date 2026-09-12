@@ -117,10 +117,9 @@ void lz4BlockDecompressInto(
       if (literalLength != 0) {
         final literals = reader.readBytesView(literalLength);
         writer.writeBytesView(literals, 0, literals.length);
-      }
-
-      if (reader.isEOF) {
-        return;
+        if (reader.isEOF) {
+          return;
+        }
       }
 
       if (reader.remaining < 2) {
@@ -143,6 +142,31 @@ void lz4BlockDecompressInto(
   } on Lz4OutputLimitException {
     rethrow;
   }
+}
+
+/// Decompresses an LZ4 block from [src] directly into the pre-allocated [dst]
+/// buffer starting at [dstOffset].
+///
+/// Returns the number of decompressed bytes written to [dst].
+///
+/// Throws:
+/// - [RangeError] if [dstOffset] is outside `[0, dst.length]`.
+/// - [Lz4OutputLimitException] if [dst] has insufficient space for the decompressed data.
+/// - [Lz4CorruptDataException] if the block data is malformed or corrupted.
+/// - [Lz4FormatException] if the block format or tokens are invalid.
+int lz4BlockDecompressIntoBuffer(
+  Uint8List src,
+  Uint8List dst, {
+  int dstOffset = 0,
+}) {
+  if (dstOffset < 0 || dstOffset > dst.length) {
+    throw RangeError.range(dstOffset, 0, dst.length, 'dstOffset');
+  }
+
+  final writer = ByteWriter.forBuffer(dst, offset: dstOffset);
+
+  lz4BlockDecompressInto(src, writer);
+  return writer.length - dstOffset;
 }
 
 int _readExtendedLength(ByteReader reader) {

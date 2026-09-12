@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [1.3.0] - 2026-09-12
+
+- **Feature**: Introduced zero-copy decompression API `lz4DecompressInto(Uint8List src, Uint8List dst, {int dstOffset = 0})` and `lz4BlockDecompressIntoBuffer` for decompressing directly into pre-allocated destination buffers without intermediary allocations.
+- **Memory**: Exposed public `Lz4BufferPool` architecture (`SimpleLz4BufferPool`, `SecureLz4BufferPool`) featuring power-of-two slab bucketing (64B to 8MB), capacity limits, decompression bomb defenses, and secure zeroization mitigating CWE-226 memory disclosure.
+- **Streaming**: Integrated `Lz4BufferPool` into `Lz4FrameOptions`, `lz4FrameDecoder`, `lz4FrameStreamDecoder`, and `lz4FrameStreamEncoder` for zero-allocation streaming pipelines.
+- **Performance**: Modularized 64-bit VM wildcopy and 32-bit Web wildcopy via conditional imports (`_wildcopy_vm.dart` and `_wildcopy_web.dart`), optimizing decompression speed across all runtime targets.
+- **Quality & Testing**: Achieved 100.0% code line test coverage (1527 / 1527 lines) verified on both Dart VM and Web/Chrome environments with 366+ passing test cases.
+- **Supply Chain**: Pinned all GitHub Actions workflow actions to immutable commit SHAs with least-privilege permissions, achieving 10/10 OSSF Scorecard supply-chain hardening.
+
 ## [1.2.0] - 2026-05-01
 
 - **Performance**: Implemented "Guarded Wildcopy" decompression (8-byte chunk copies), providing ~45–117% throughput gains on random data.

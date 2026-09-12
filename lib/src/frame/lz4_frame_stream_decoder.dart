@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import '../block/lz4_block_decoder.dart';
 import '../internal/byte_writer.dart';
+import '../internal/lz4_buffer_pool.dart';
 import '../internal/lz4_exception.dart';
 import '../xxhash/xxh32.dart';
 import 'lz4_frame_options.dart';
@@ -15,11 +16,13 @@ const _lz4LegacyFrameMagic = 0x184C2102;
 StreamTransformer<List<int>, List<int>> lz4FrameDecoderTransformer({
   int? maxOutputBytes,
   Lz4DictionaryResolver? dictionaryResolver,
+  Lz4BufferPool? bufferPool,
 }) {
   return StreamTransformer.fromBind((input) async* {
     final decoder = _Lz4FrameStreamDecoder(
       maxOutputBytes: maxOutputBytes,
       dictionaryResolver: dictionaryResolver,
+      bufferPool: bufferPool,
     );
 
     await for (final chunk in input) {
@@ -62,6 +65,7 @@ final class _Lz4FrameStreamDecoder {
   final _ChunkBuffer _buf = _ChunkBuffer();
   final int? _maxOutputBytes;
   final Lz4DictionaryResolver? _dictionaryResolver;
+  final Lz4BufferPool? _bufferPool;
   bool _finished = false;
 
   _State _state = _State.magic;
@@ -101,8 +105,10 @@ final class _Lz4FrameStreamDecoder {
   _Lz4FrameStreamDecoder({
     int? maxOutputBytes,
     Lz4DictionaryResolver? dictionaryResolver,
+    Lz4BufferPool? bufferPool,
   })  : _maxOutputBytes = maxOutputBytes,
-        _dictionaryResolver = dictionaryResolver;
+        _dictionaryResolver = dictionaryResolver,
+        _bufferPool = bufferPool;
 
   void add(Uint8List chunk) {
     _buf.add(chunk);
@@ -331,11 +337,6 @@ final class _Lz4FrameStreamDecoder {
           continue;
 
         case _State.legacyBlockSize:
-          if (_legacyPending != null) {
-            _state = _State.legacyAfterBlock;
-            continue;
-          }
-
           if (!_buf.has(4)) {
             if (_finished) {
               _state = _State.magic;
@@ -375,9 +376,17 @@ final class _Lz4FrameStreamDecoder {
 
           const legacyBlockMaxSize = 8 * 1024 * 1024;
           final blockData = _buf.readBytes(_legacyBlockCSize);
-          final tmp = ByteWriter(maxLength: legacyBlockMaxSize);
-          lz4BlockDecompressInto(blockData, tmp);
-          final produced = tmp.toBytes();
+          final tmp = ByteWriter(
+            maxLength: legacyBlockMaxSize,
+            bufferPool: _bufferPool,
+          );
+          final Uint8List produced;
+          try {
+            lz4BlockDecompressInto(blockData, tmp);
+            produced = tmp.toBytes();
+          } finally {
+            tmp.release();
+          }
 
           final maxOut = _maxOutputBytes;
           if (maxOut != null && _totalProduced + produced.length > maxOut) {
@@ -395,11 +404,7 @@ final class _Lz4FrameStreamDecoder {
           continue;
 
         case _State.legacyAfterBlock:
-          final pending = _legacyPending;
-          if (pending == null) {
-            _state = _State.legacyBlockSize;
-            continue;
-          }
+          final pending = _legacyPending!;
 
           if (!_buf.has(4)) {
             if (!_finished) {
@@ -424,7 +429,8 @@ final class _Lz4FrameStreamDecoder {
 
   void finish() {
     _finished = true;
-    if (_buf.length == 0 && _state == _State.magic) {
+    if (_buf.length == 0 &&
+        (_state == _State.magic || _state == _State.legacyBlockSize)) {
       return;
     }
     if (_state == _State.legacyAfterBlock && _legacyPending != null) {
@@ -453,17 +459,32 @@ final class _Lz4FrameStreamDecoder {
               dictLen > historyWindow ? historyWindow : dictLen;
           final effectiveDictStart = dictLen - effectiveDictLen;
 
-          final tmp = ByteWriter(maxLength: effectiveDictLen + _blockMaxSize);
-          tmp.writeBytesView(dict, effectiveDictStart, dictLen);
-          lz4BlockDecompressInto(blockData, tmp);
-          final decodedFull = tmp.bytesView();
-          // Skip the dictionary part
-          final decoded = Uint8List.sublistView(decodedFull, effectiveDictLen);
-          produced = Uint8List.fromList(decoded);
+          final blockWriter = ByteWriter(
+            maxLength: effectiveDictLen + _blockMaxSize,
+            bufferPool: _bufferPool,
+          );
+          try {
+            blockWriter.writeBytesView(dict, effectiveDictStart, dictLen);
+            lz4BlockDecompressInto(blockData, blockWriter);
+            final decodedFull = blockWriter.bytesView();
+            // Skip the dictionary part
+            final decoded =
+                Uint8List.sublistView(decodedFull, effectiveDictLen);
+            produced = Uint8List.fromList(decoded);
+          } finally {
+            blockWriter.release();
+          }
         } else {
-          final tmp = ByteWriter(maxLength: _blockMaxSize);
-          lz4BlockDecompressInto(blockData, tmp);
-          produced = tmp.toBytes();
+          final blockWriter = ByteWriter(
+            maxLength: _blockMaxSize,
+            bufferPool: _bufferPool,
+          );
+          try {
+            lz4BlockDecompressInto(blockData, blockWriter);
+            produced = blockWriter.toBytes();
+          } finally {
+            blockWriter.release();
+          }
         }
       } else {
         final historyLen = _historyLen;
@@ -480,37 +501,50 @@ final class _Lz4FrameStreamDecoder {
           final copyStart = dictLen - copyLen;
 
           final prefixLen = copyLen + historyLen;
-          final blockWriter = ByteWriter(maxLength: prefixLen + _blockMaxSize);
+          final blockWriter = ByteWriter(
+            maxLength: prefixLen + _blockMaxSize,
+            bufferPool: _bufferPool,
+          );
+          try {
+            // Write dictionary part
+            blockWriter.writeBytesView(dict, copyStart, dictLen);
 
-          // Write dictionary part
-          blockWriter.writeBytesView(dict, copyStart, dictLen);
+            // Write history part
+            if (historyLen > 0) {
+              blockWriter.writeBytesView(_history, 0, historyLen);
+            }
 
-          // Write history part
-          if (historyLen > 0) {
-            blockWriter.writeBytesView(_history, 0, historyLen);
+            lz4BlockDecompressInto(blockData, blockWriter);
+
+            final producedLen = blockWriter.length - prefixLen;
+            if (producedLen > _blockMaxSize) {
+              throw const Lz4CorruptDataException('Block size exceeds maximum');
+            }
+
+            produced = blockWriter.bytesView().sublist(prefixLen);
+          } finally {
+            blockWriter.release();
           }
-
-          lz4BlockDecompressInto(blockData, blockWriter);
-
-          final producedLen = blockWriter.length - prefixLen;
-          if (producedLen > _blockMaxSize) {
-            throw const Lz4CorruptDataException('Block size exceeds maximum');
-          }
-
-          produced = blockWriter.bytesView().sublist(prefixLen);
         } else {
-          final blockWriter = ByteWriter(maxLength: historyLen + _blockMaxSize);
-          if (historyLen != 0) {
-            blockWriter.writeBytesView(_history, 0, historyLen);
-          }
-          lz4BlockDecompressInto(blockData, blockWriter);
+          final blockWriter = ByteWriter(
+            maxLength: historyLen + _blockMaxSize,
+            bufferPool: _bufferPool,
+          );
+          try {
+            if (historyLen != 0) {
+              blockWriter.writeBytesView(_history, 0, historyLen);
+            }
+            lz4BlockDecompressInto(blockData, blockWriter);
 
-          final producedLen = blockWriter.length - historyLen;
-          if (producedLen > _blockMaxSize) {
-            throw const Lz4CorruptDataException('Block size exceeds maximum');
-          }
+            final producedLen = blockWriter.length - historyLen;
+            if (producedLen > _blockMaxSize) {
+              throw const Lz4CorruptDataException('Block size exceeds maximum');
+            }
 
-          produced = blockWriter.bytesView().sublist(historyLen);
+            produced = blockWriter.bytesView().sublist(historyLen);
+          } finally {
+            blockWriter.release();
+          }
         }
       }
     }
@@ -730,9 +764,7 @@ final class _ChunkBuffer {
   }
 
   void _ensureCapacity(int n) {
-    if (n < 0) {
-      throw RangeError.value(n, 'n');
-    }
+    assert(n >= 0);
 
     if (length == 0) {
       _start = 0;
