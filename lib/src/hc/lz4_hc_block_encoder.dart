@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import '../internal/byte_writer.dart';
+import '../internal/lz4_block_codec.dart';
 import '../internal/lz4_engine.dart';
 import 'lz4_hc_options.dart';
 
@@ -58,11 +59,15 @@ final class PureDartLz4HcEngine implements Lz4CompressionEngine {
 
     const minMatch = 4;
     if (inputLength < minMatch) {
-      _writeLastLiterals(writer, input, dictLength, inputLength);
+      writeLastLiterals(writer, input, dictLength, inputLength);
       return;
     }
 
     final hashTable = _hashTable;
+
+    // Reset hash table between calls to prevent stale entries from leaking
+    // across blocks when the engine is reused (e.g. in frame encoding).
+    hashTable.fillRange(0, _hashSize, -1);
 
     if (_chain.length < input.length) {
       _chain = Int32List(input.length);
@@ -146,7 +151,7 @@ final class PureDartLz4HcEngine implements Lz4CompressionEngine {
         }
 
         final literalLength = matchStart - anchor;
-        _writeSequence(
+        writeSequence(
           writer,
           input,
           anchor,
@@ -177,7 +182,7 @@ final class PureDartLz4HcEngine implements Lz4CompressionEngine {
 
     final lastLiterals = totalLength - anchor;
     if (lastLiterals != 0) {
-      _writeLastLiterals(writer, input, anchor, lastLiterals);
+      writeLastLiterals(writer, input, anchor, lastLiterals);
     }
   }
 }
@@ -209,60 +214,3 @@ int _readUint32LE(ByteData data, int offset) =>
 
 @pragma('vm:prefer-inline')
 int _hash(int value) => (value * 2654435761 & 0xffffffff) >>> _hashShift;
-
-void _writeSequence(
-  ByteWriter writer,
-  Uint8List src,
-  int literalStart,
-  int literalLength,
-  int matchDistance,
-  int matchLength,
-) {
-  final matchLenMinus4 = matchLength - 4;
-
-  final tokenLiteral = literalLength < 15 ? literalLength : 15;
-  final tokenMatch = matchLenMinus4 < 15 ? matchLenMinus4 : 15;
-
-  writer.writeUint8((tokenLiteral << 4) | tokenMatch);
-
-  if (literalLength >= 15) {
-    _writeLength(writer, literalLength - 15);
-  }
-
-  if (literalLength != 0) {
-    writer.writeBytesView(src, literalStart, literalStart + literalLength);
-  }
-
-  writer.writeUint16LE(matchDistance);
-
-  if (matchLenMinus4 >= 15) {
-    _writeLength(writer, matchLenMinus4 - 15);
-  }
-}
-
-void _writeLastLiterals(
-  ByteWriter writer,
-  Uint8List src,
-  int start,
-  int length,
-) {
-  final tokenLiteral = length < 15 ? length : 15;
-  writer.writeUint8(tokenLiteral << 4);
-
-  if (length >= 15) {
-    _writeLength(writer, length - 15);
-  }
-
-  if (length != 0) {
-    writer.writeBytesView(src, start, start + length);
-  }
-}
-
-void _writeLength(ByteWriter writer, int length) {
-  var remaining = length;
-  while (remaining >= 255) {
-    writer.writeUint8(255);
-    remaining -= 255;
-  }
-  writer.writeUint8(remaining);
-}

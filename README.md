@@ -35,7 +35,11 @@ Implemented:
 
 ## Limitations
 
-None. This package provides complete encode/decode support for all LZ4 frame formats.
+- **No FFI acceleration.** This is a pure Dart implementation. Native LZ4 bindings (e.g. via `dart:ffi`) will be faster for large payloads.
+- **Single-threaded.** Compression and decompression run on a single isolate. Multi-threaded compression is a roadmap item.
+- **Web precision.** Content sizes above 2^53 bytes may lose precision on Web (JS) targets due to 64-bit integer limitations.
+- **Checksums are not cryptographic.** `blockChecksum` and `contentChecksum` detect corruption, not tampering. Use a MAC or signature for authentication.
+- **Dictionary allocation.** Dictionary encode/decode allocates a concatenation buffer proportional to dictionary + input size.
 
 ## Security / untrusted input
 
@@ -232,6 +236,26 @@ final decodedStream = byteChunksStream.transform(
   lz4FrameDecoder(bufferPool: pool),
 );
 ```
+
+### dart:convert Codec
+
+Compose LZ4 with the standard Dart conversion ecosystem:
+
+```dart
+import 'dart:convert';
+
+final codec = Lz4Codec();
+final compressed = codec.encode(data);
+final decoded = codec.decode(compressed);
+
+// Fuse with other codecs:
+final jsonLz4 = json.fuse(codec);
+final payload = utf8.encode('{"hello":"world"}');
+final compressedJson = jsonLz4.encode(payload);
+final restored = jsonLz4.decode(compressedJson);
+```
+
+The decoder enforces a 256 MiB default `maxOutputBytes` to prevent decompression bombs. Pass an explicit limit via `Lz4Codec(maxOutputBytes: ...)` to override.
 
 ## Benchmarks
 

@@ -15,6 +15,12 @@ const _prime32_3 = 0xC2B2AE3D;
 const _prime32_4 = 0x27D4EB2F;
 const _prime32_5 = 0x165667B1;
 
+/// Incremental xxHash32 hasher.
+///
+/// After calling [digest], internal state is **not** reset. To reuse this
+/// instance for a new hash, construct a new [Xxh32] instead. Calling [update]
+/// after [digest] will produce incorrect results because the accumulator
+/// state has been consumed.
 final class Xxh32 {
   final int _seed;
   int _totalLen;
@@ -113,6 +119,11 @@ final class Xxh32 {
     }
   }
 
+  /// Computes and returns the final xxHash32 digest.
+  ///
+  /// After this call, the internal state is consumed and **not** reset.
+  /// Do not call [update] after [digest] on the same instance — construct a
+  /// new [Xxh32] for a fresh hash.
   int digest() {
     int h32;
     if (_totalLen >= 16) {

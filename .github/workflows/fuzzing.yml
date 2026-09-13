@@ -27,6 +27,6 @@ jobs:
         run: dart pub get
 
       - name: Run Fuzz Tests
-        run: dart test fuzz/block_fuzzer.dart
+        run: dart test fuzz/block_fuzzer.dart fuzz/frame_fuzzer.dart
         env:
           FUZZ_ITERATIONS: 5000

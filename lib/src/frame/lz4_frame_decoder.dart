@@ -5,13 +5,9 @@ import '../internal/byte_reader.dart';
 import '../internal/byte_writer.dart';
 import '../internal/lz4_buffer_pool.dart';
 import '../internal/lz4_exception.dart';
+import '../internal/lz4_frame_constants.dart';
 import '../xxhash/xxh32.dart';
 import 'lz4_frame_options.dart';
-
-const _lz4FrameMagic = 0x184D2204;
-const _lz4SkippableMagicBase = 0x184D2A50;
-const _lz4SkippableMagicMask = 0xFFFFFFF0;
-const _lz4LegacyFrameMagic = 0x184C2102;
 
 Uint8List lz4FrameDecodeBytes(
   Uint8List src, {
@@ -19,10 +15,6 @@ Uint8List lz4FrameDecodeBytes(
   Lz4DictionaryResolver? dictionaryResolver,
   Lz4BufferPool? bufferPool,
 }) {
-  // If maxOutputBytes is omitted, we use a default limit of 256MB to prevent
-  // decompression bombs from exhausting memory. Users can override this by
-  // providing their own limit.
-  const defaultMaxOutputBytes = 256 * 1024 * 1024;
   return _Lz4FrameDecoder(
     src,
     maxOutputBytes: maxOutputBytes ?? defaultMaxOutputBytes,
@@ -68,18 +60,18 @@ final class _Lz4FrameDecoder {
 
     final magic = _reader.readUint32LE();
 
-    if ((magic & _lz4SkippableMagicMask) == _lz4SkippableMagicBase) {
+    if ((magic & lz4SkippableMagicMask) == lz4SkippableMagicBase) {
       _skipSkippableFrame();
       return;
     }
 
-    if (magic == _lz4LegacyFrameMagic) {
+    if (magic == lz4LegacyFrameMagic) {
       final decoded = _decodeLegacyFrame();
       _out.writeBytes(decoded);
       return;
     }
 
-    if (magic != _lz4FrameMagic) {
+    if (magic != lz4FrameMagic) {
       throw const Lz4FormatException('Invalid LZ4 frame magic number');
     }
 
@@ -163,12 +155,7 @@ final class _Lz4FrameDecoder {
     return (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) & 0xffffffff;
   }
 
-  bool _isLegacyBoundary(int magic) {
-    if (magic == _lz4FrameMagic || magic == _lz4LegacyFrameMagic) {
-      return true;
-    }
-    return (magic & _lz4SkippableMagicMask) == _lz4SkippableMagicBase;
-  }
+  bool _isLegacyBoundary(int magic) => isLegacyBoundary(magic);
 
   Uint8List _decodeFrame() {
     final remaining =
@@ -210,7 +197,7 @@ final class _Lz4FrameDecoder {
     }
 
     final blockMaxSizeId = (bd >> 4) & 0x07;
-    final blockMaxSize = _decodeBlockMaxSize(blockMaxSizeId);
+    final blockMaxSize = decodeBlockMaxSize(blockMaxSizeId);
 
     int? contentSize;
     if (contentSizeFlag) {
@@ -399,20 +386,5 @@ final class _Lz4FrameDecoder {
 
     final decoded = blockWriter.bytesView();
     frameOut.writeBytesView(decoded, prefixLen, decoded.length);
-  }
-}
-
-int _decodeBlockMaxSize(int id) {
-  switch (id) {
-    case 4:
-      return 64 * 1024;
-    case 5:
-      return 256 * 1024;
-    case 6:
-      return 1024 * 1024;
-    case 7:
-      return 4 * 1024 * 1024;
-    default:
-      throw const Lz4FormatException('Invalid block maximum size');
   }
 }
