@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
-## [Unreleased]
+## [1.4.0] - 2026-09-13
 
 - **Security**: Added default `maxOutputBytes` (256 MiB) to the streaming frame decoder (`lz4FrameDecoder`), closing a decompression bomb vector (CWE-400) that contradicted the project's stated "bounds-safe decoding" goal. The sync decoder already had this default.
 - **Security**: Documented `lz4BlockDecompressInto` partial-output behavior — truncated blocks that end after a literal-only sequence produce partial output without error. Callers should verify `writer.length` against expected size.

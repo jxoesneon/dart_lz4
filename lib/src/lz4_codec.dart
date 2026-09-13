@@ -1,12 +1,9 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'internal/lz4_frame_constants.dart';
 import 'frame/lz4_frame_decoder.dart';
 import 'frame/lz4_frame_encoder.dart';
-
-/// Default output limit (256 MiB) enforced by [Lz4Codec] to prevent
-/// decompression bombs when decoding untrusted input.
-const _defaultMaxOutputBytes = 256 * 1024 * 1024;
 
 /// A [Codec] that compresses [List<int>] data using the LZ4 frame format.
 ///
@@ -39,7 +36,7 @@ class Lz4Codec extends Codec<List<int>, List<int>> {
   /// [maxOutputBytes] sets the default decompression bomb protection limit.
   const Lz4Codec({
     this.acceleration = 1,
-    this.maxOutputBytes = _defaultMaxOutputBytes,
+    this.maxOutputBytes = defaultMaxOutputBytes,
   });
 
   @override
@@ -70,7 +67,7 @@ class _Lz4Encoder extends Converter<List<int>, List<int>> {
 class _Lz4Decoder extends Converter<List<int>, List<int>> {
   final int maxOutputBytes;
 
-  const _Lz4Decoder({this.maxOutputBytes = _defaultMaxOutputBytes});
+  const _Lz4Decoder({this.maxOutputBytes = defaultMaxOutputBytes});
 
   @override
   List<int> convert(List<int> input, [int? start, int? end]) {

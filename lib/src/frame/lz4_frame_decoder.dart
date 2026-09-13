@@ -15,10 +15,6 @@ Uint8List lz4FrameDecodeBytes(
   Lz4DictionaryResolver? dictionaryResolver,
   Lz4BufferPool? bufferPool,
 }) {
-  // If maxOutputBytes is omitted, we use a default limit of 256MB to prevent
-  // decompression bombs from exhausting memory. Users can override this by
-  // providing their own limit.
-  const defaultMaxOutputBytes = 256 * 1024 * 1024;
   return _Lz4FrameDecoder(
     src,
     maxOutputBytes: maxOutputBytes ?? defaultMaxOutputBytes,

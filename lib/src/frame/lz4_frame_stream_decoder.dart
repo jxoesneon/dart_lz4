@@ -14,11 +14,10 @@ StreamTransformer<List<int>, List<int>> lz4FrameDecoderTransformer({
   Lz4DictionaryResolver? dictionaryResolver,
   Lz4BufferPool? bufferPool,
 }) {
-  // If maxOutputBytes is omitted, use a default limit of 256MB to prevent
+  // If maxOutputBytes is omitted, use the shared default limit to prevent
   // decompression bombs from exhausting memory. This matches the sync
   // decoder (lz4FrameDecodeBytes). Users can override by providing their
   // own limit or passing null explicitly for unbounded output.
-  const defaultMaxOutputBytes = 256 * 1024 * 1024;
   return StreamTransformer.fromBind((input) async* {
     final decoder = _Lz4FrameStreamDecoder(
       maxOutputBytes: maxOutputBytes ?? defaultMaxOutputBytes,

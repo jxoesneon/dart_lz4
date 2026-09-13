@@ -237,6 +237,26 @@ final decodedStream = byteChunksStream.transform(
 );
 ```
 
+### dart:convert Codec
+
+Compose LZ4 with the standard Dart conversion ecosystem:
+
+```dart
+import 'dart:convert';
+
+final codec = Lz4Codec();
+final compressed = codec.encode(data);
+final decoded = codec.decode(compressed);
+
+// Fuse with other codecs:
+final jsonLz4 = json.fuse(codec);
+final payload = utf8.encode('{"hello":"world"}');
+final compressedJson = jsonLz4.encode(payload);
+final restored = jsonLz4.decode(compressedJson);
+```
+
+The decoder enforces a 256 MiB default `maxOutputBytes` to prevent decompression bombs. Pass an explicit limit via `Lz4Codec(maxOutputBytes: ...)` to override.
+
 ## Benchmarks
 
 Run:

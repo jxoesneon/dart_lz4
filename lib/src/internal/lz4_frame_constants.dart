@@ -12,6 +12,13 @@ const lz4SkippableMagicMask = 0xFFFFFFF0;
 /// Legacy frame magic number (`0x184C2102`), produced by `lz4 -l`.
 const lz4LegacyFrameMagic = 0x184C2102;
 
+/// Default maximum decompressed output in bytes (256 MiB).
+///
+/// Applied by the sync frame decoder, streaming frame decoder, and
+/// `Lz4Codec` when the caller omits an explicit `maxOutputBytes`. This
+/// mitigates decompression-bomb attacks (CWE-400) on untrusted input.
+const defaultMaxOutputBytes = 256 * 1024 * 1024;
+
 /// Decodes the block maximum size from the BD field's bits 4–6.
 ///
 /// Throws [Lz4FormatException] for invalid size IDs.
