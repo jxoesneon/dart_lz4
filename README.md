@@ -3,6 +3,7 @@
 [![CI](https://github.com/jxoesneon/dart_lz4/actions/workflows/ci.yml/badge.svg)](https://github.com/jxoesneon/dart_lz4/actions/workflows/ci.yml)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14608/badge)](https://www.bestpractices.dev/projects/14608)
 [![Fuzzing Status](https://github.com/jxoesneon/dart_lz4/actions/workflows/fuzzing.yml/badge.svg)](https://github.com/jxoesneon/dart_lz4/actions/workflows/fuzzing.yml)
+[![codecov](https://codecov.io/gh/jxoesneon/dart_lz4/branch/main/graph/badge.svg)](https://codecov.io/gh/jxoesneon/dart_lz4)
 
 Pure Dart implementation of LZ4 (block + frame) and LZ4HC, including streaming frame encode/decode.
 

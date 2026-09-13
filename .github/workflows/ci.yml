@@ -47,11 +47,26 @@ jobs:
       - name: Analyze
         run: dart analyze
 
-      - name: Test
-        run: dart test
+      - name: Test with coverage
+        run: dart test --coverage=coverage
 
       - name: Test (Chrome)
         run: dart test -p chrome
+
+      - name: Format coverage
+        run: |
+          dart pub global activate coverage
+          dart pub global run coverage:format_coverage \
+            --lcov \
+            --in=coverage \
+            --out=coverage/lcov.info \
+            --report-on=lib
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24
+        with:
+          files: coverage/lcov.info
+          fail_ci_if_error: false
 
       - name: Benchmark
         run: dart run tool/benchmark_compare.dart --run --github-summary --threshold 15
