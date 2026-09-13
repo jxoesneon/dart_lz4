@@ -95,6 +95,23 @@ Uint8List lz4BlockDecompress(
   }
 }
 
+/// Decompresses an LZ4 *block* [src] by appending decoded bytes to [writer].
+///
+/// Unlike [lz4BlockDecompress], this function does **not** require a
+/// pre-declared [decompressedSize] and stops as soon as the input is
+/// exhausted (`reader.isEOF`). This means that a truncated or malformed
+/// block that ends after a literal-only sequence will produce **partial
+/// output** without throwing an error.
+///
+/// Callers that need to verify completeness should check the number of
+/// bytes written to [writer] (via `writer.length`) against the expected
+/// decompressed size after this function returns.
+///
+/// Throws:
+/// - [Lz4CorruptDataException] if the block data is malformed or contains
+///   an invalid offset.
+/// - [Lz4FormatException] if the block format or tokens are invalid.
+/// - [Lz4OutputLimitException] if [writer] has insufficient space.
 void lz4BlockDecompressInto(
   Uint8List src,
   ByteWriter writer,

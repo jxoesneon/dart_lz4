@@ -2,12 +2,8 @@ import 'dart:typed_data';
 
 import '../internal/byte_reader.dart';
 import '../internal/lz4_exception.dart';
+import '../internal/lz4_frame_constants.dart';
 import '../xxhash/xxh32.dart';
-
-const _lz4FrameMagic = 0x184D2204;
-const _lz4SkippableMagicBase = 0x184D2A50;
-const _lz4SkippableMagicMask = 0xFFFFFFF0;
-const _lz4LegacyFrameMagic = 0x184C2102;
 
 /// Metadata about an LZ4 frame.
 class Lz4FrameInfo {
@@ -96,7 +92,7 @@ Lz4FrameInfo lz4FrameInfo(Uint8List src) {
   final magic = reader.readUint32LE();
 
   // Skippable Frame
-  if ((magic & _lz4SkippableMagicMask) == _lz4SkippableMagicBase) {
+  if ((magic & lz4SkippableMagicMask) == lz4SkippableMagicBase) {
     if (reader.remaining < 4) {
       throw const Lz4FormatException('Unexpected end of input');
     }
@@ -115,7 +111,7 @@ Lz4FrameInfo lz4FrameInfo(Uint8List src) {
   }
 
   // Legacy Frame
-  if (magic == _lz4LegacyFrameMagic) {
+  if (magic == lz4LegacyFrameMagic) {
     return Lz4FrameInfo._(
       magic: magic,
       isSkippable: false,
@@ -125,7 +121,7 @@ Lz4FrameInfo lz4FrameInfo(Uint8List src) {
   }
 
   // Standard Frame
-  if (magic != _lz4FrameMagic) {
+  if (magic != lz4FrameMagic) {
     throw const Lz4FormatException('Invalid LZ4 frame magic number');
   }
 
@@ -159,7 +155,7 @@ Lz4FrameInfo lz4FrameInfo(Uint8List src) {
   }
 
   final blockMaxSizeId = (bd >> 4) & 0x07;
-  final blockMaxSize = _decodeBlockMaxSize(blockMaxSizeId);
+  final blockMaxSize = decodeBlockMaxSize(blockMaxSizeId);
 
   int? contentSize;
   if (contentSizeFlag) {
@@ -200,19 +196,4 @@ Lz4FrameInfo lz4FrameInfo(Uint8List src) {
     blockMaxSize: blockMaxSize,
     headerSize: reader.offset,
   );
-}
-
-int _decodeBlockMaxSize(int id) {
-  switch (id) {
-    case 4:
-      return 64 * 1024;
-    case 5:
-      return 256 * 1024;
-    case 6:
-      return 1024 * 1024;
-    case 7:
-      return 4 * 1024 * 1024;
-    default:
-      throw const Lz4FormatException('Invalid block maximum size');
-  }
 }

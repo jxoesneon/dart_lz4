@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [Unreleased]
+
+- **Security**: Added default `maxOutputBytes` (256 MiB) to the streaming frame decoder (`lz4FrameDecoder`), closing a decompression bomb vector (CWE-400) that contradicted the project's stated "bounds-safe decoding" goal. The sync decoder already had this default.
+- **Security**: Documented `lz4BlockDecompressInto` partial-output behavior — truncated blocks that end after a literal-only sequence produce partial output without error. Callers should verify `writer.length` against expected size.
+- **API**: Exposed `bufferPool` parameter on the public `lz4FrameDecode` and `lz4FrameDecoder` APIs, matching the internal implementation.
+- **API**: Added `Lz4Codec` — a `dart:convert` `Codec<List<int>, List<int>>` wrapper for LZ4 frame encode/decode, enabling composition with the Dart conversion ecosystem (e.g. `json.fuse(Lz4Codec())`). Enforces a 256 MiB default `maxOutputBytes` per Safety mandate.
+- **Refactor**: Extracted shared LZ4 frame constants (`lz4FrameMagic`, `lz4SkippableMagicBase`, `lz4LegacyFrameMagic`, `decodeBlockMaxSize`, `isLegacyBoundary`) into `lib/src/internal/lz4_frame_constants.dart`, eliminating duplication across 5 files.
+- **Refactor**: Extracted shared block codec helpers (`writeSequence`, `writeLastLiterals`, `writeLength`) into `lib/src/internal/lz4_block_codec.dart`, eliminating duplication between fast and HC block encoders.
+- **Fix**: Removed dead if/else in `lz4LegacyFrameEncode` — both branches were identical.
+- **Fix**: Fixed `lz4_sized_block.dart` upward import from the public barrel — now imports internal block encoder/decoder directly.
+- **Fix**: Reset hash table state between `compress()` calls in both fast and HC engines to prevent stale entries leaking across blocks during frame encoding.
+- **Performance**: Replaced manual byte loop in `_appendHistory` with `List.copyRange`.
+- **Performance**: Changed `_descriptorBytes` from `List<int>` to `Uint8List` to avoid checksum copy overhead.
+- **Docs**: Documented `Xxh32.digest()` lifecycle — internal state is not reset after `digest()`.
+- **Docs**: Replaced README "Limitations: None" with an honest list (no FFI, single-threaded, Web precision, non-cryptographic checksums, dictionary allocation).
+- **CI**: Added frame fuzzing to the fuzzing workflow (`fuzz/frame_fuzzer.dart`), covering random frame decompression, bitflip corruption, streaming chunk decoding, and `maxOutputBytes` enforcement.
+- **Maintenance**: Removed unused `analyzer` dev dependency.
+
 ## [1.3.0] - 2026-09-12
 
 - **Feature**: Introduced zero-copy decompression API `lz4DecompressInto(Uint8List src, Uint8List dst, {int dstOffset = 0})` and `lz4BlockDecompressIntoBuffer` for decompressing directly into pre-allocated destination buffers without intermediary allocations.

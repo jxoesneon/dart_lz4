@@ -4,11 +4,10 @@ import 'dart:typed_data';
 import '../internal/byte_writer.dart';
 import '../internal/lz4_buffer_pool.dart';
 import '../internal/lz4_exception.dart';
+import '../internal/lz4_frame_constants.dart';
 import '../xxhash/xxh32.dart';
 import 'lz4_engine_factory.dart';
 import 'lz4_frame_options.dart';
-
-const _lz4FrameMagic = 0x184D2204;
 
 StreamTransformer<List<int>, List<int>> lz4FrameEncoderTransformer({
   int acceleration = 1,
@@ -235,7 +234,7 @@ Uint8List _encodeHeader({
   required int? dictId,
 }) {
   final writer = ByteWriter(initialCapacity: 24);
-  writer.writeUint32LE(_lz4FrameMagic);
+  writer.writeUint32LE(lz4FrameMagic);
   writer.writeUint8(flg);
   writer.writeUint8(bd);
 

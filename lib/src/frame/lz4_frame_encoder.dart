@@ -3,14 +3,12 @@ import 'dart:typed_data';
 import '../block/lz4_block_encoder.dart';
 import '../internal/byte_writer.dart';
 import '../internal/lz4_exception.dart';
+import '../internal/lz4_frame_constants.dart';
 import '../xxhash/xxh32.dart';
 import '../internal/lz4_engine.dart';
 import 'lz4_engine_factory.dart';
 import 'lz4_frame_options.dart';
 
-const _lz4FrameMagic = 0x184D2204;
-const _lz4SkippableMagicBase = 0x184D2A50;
-const _lz4LegacyFrameMagic = 0x184C2102;
 const _legacyBlockMaxSize = 8 * 1024 * 1024; // 8 MiB
 
 /// Encodes a skippable frame containing [data].
@@ -37,7 +35,7 @@ Uint8List lz4SkippableFrameEncode(Uint8List data, {int index = 0}) {
   final view = ByteData.sublistView(result);
 
   // Magic number
-  view.setUint32(0, _lz4SkippableMagicBase + index, Endian.little);
+  view.setUint32(0, lz4SkippableMagicBase + index, Endian.little);
   // Size
   view.setUint32(4, data.length, Endian.little);
   // Data
@@ -57,7 +55,7 @@ Uint8List lz4LegacyFrameEncode(Uint8List src, {int acceleration = 1}) {
   final writer = ByteWriter(initialCapacity: src.length + 64);
 
   // Write legacy magic
-  writer.writeUint32LE(_lz4LegacyFrameMagic);
+  writer.writeUint32LE(lz4LegacyFrameMagic);
 
   var offset = 0;
   while (offset < src.length) {
@@ -71,17 +69,9 @@ Uint8List lz4LegacyFrameEncode(Uint8List src, {int acceleration = 1}) {
     // Compress block
     final compressed = lz4BlockCompress(chunk, acceleration: acceleration);
 
-    // Legacy format always uses compressed data (no uncompressed fallback in original spec)
-    // However, we should still store uncompressed if compression doesn't help
-    if (compressed.length < chunk.length) {
-      writer.writeUint32LE(compressed.length);
-      writer.writeBytes(compressed);
-    } else {
-      // Store uncompressed - legacy decoders expect this to still decompress
-      // but since LZ4 block format handles literals, just write the compressed version
-      writer.writeUint32LE(compressed.length);
-      writer.writeBytes(compressed);
-    }
+    // Legacy format always stores the compressed block data.
+    writer.writeUint32LE(compressed.length);
+    writer.writeBytes(compressed);
 
     offset = end;
   }
@@ -121,7 +111,7 @@ Uint8List lz4FrameEncodeBytesWithOptions(
   final blockMaxSize = options.blockSize.maxBytes;
 
   final writer = ByteWriter(initialCapacity: src.length + 64);
-  writer.writeUint32LE(_lz4FrameMagic);
+  writer.writeUint32LE(lz4FrameMagic);
 
   writer.writeUint8(flg);
   writer.writeUint8(bd);

@@ -1,6 +1,21 @@
 import 'dart:typed_data';
 
-import '../../dart_lz4.dart';
+import '../internal/lz4_exception.dart';
+import 'lz4_block_decoder.dart';
+import 'lz4_block_encoder.dart';
+import '../hc/lz4_hc_block_encoder.dart';
+import '../hc/lz4_hc_options.dart';
+
+/// Compression level for [lz4CompressWithSize].
+///
+/// Re-exported from the public barrel as [Lz4CompressionLevel].
+enum Lz4CompressionLevel {
+  /// Fast compression (lower ratio, higher throughput).
+  fast,
+
+  /// High-compression mode (higher ratio, lower throughput).
+  hc,
+}
 
 /// Compresses [src] into an LZ4 block with the decompressed size prepended.
 ///
@@ -11,17 +26,20 @@ import '../../dart_lz4.dart';
 /// This allows [lz4DecompressWithSize] to decompress the block without needing
 /// to know the decompressed size beforehand.
 ///
-/// [level] and [acceleration] behave the same as in [lz4Compress].
+/// [level] and [acceleration] behave the same as in the public [lz4Compress].
 Uint8List lz4CompressWithSize(
   Uint8List src, {
   Lz4CompressionLevel level = Lz4CompressionLevel.fast,
   int acceleration = 1,
+  Lz4HcOptions? hcOptions,
 }) {
-  final compressed = lz4Compress(
-    src,
-    level: level,
-    acceleration: acceleration,
-  );
+  final Uint8List compressed;
+  switch (level) {
+    case Lz4CompressionLevel.fast:
+      compressed = lz4BlockCompress(src, acceleration: acceleration);
+    case Lz4CompressionLevel.hc:
+      compressed = lz4HcBlockCompress(src, options: hcOptions);
+  }
 
   final out = Uint8List(4 + compressed.length);
   final view = ByteData.view(out.buffer);
@@ -56,7 +74,7 @@ Uint8List lz4DecompressWithSize(Uint8List src, {int? maxDecompressedSize}) {
   // passing a view to the decoder.
   final compressedData = Uint8List.sublistView(src, 4);
 
-  return lz4Decompress(
+  return lz4BlockDecompress(
     compressedData,
     decompressedSize: decompressedSize,
   );

@@ -35,7 +35,11 @@ Implemented:
 
 ## Limitations
 
-None. This package provides complete encode/decode support for all LZ4 frame formats.
+- **No FFI acceleration.** This is a pure Dart implementation. Native LZ4 bindings (e.g. via `dart:ffi`) will be faster for large payloads.
+- **Single-threaded.** Compression and decompression run on a single isolate. Multi-threaded compression is a roadmap item.
+- **Web precision.** Content sizes above 2^53 bytes may lose precision on Web (JS) targets due to 64-bit integer limitations.
+- **Checksums are not cryptographic.** `blockChecksum` and `contentChecksum` detect corruption, not tampering. Use a MAC or signature for authentication.
+- **Dictionary allocation.** Dictionary encode/decode allocates a concatenation buffer proportional to dictionary + input size.
 
 ## Security / untrusted input
 

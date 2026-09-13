@@ -5,22 +5,23 @@ import '../block/lz4_block_decoder.dart';
 import '../internal/byte_writer.dart';
 import '../internal/lz4_buffer_pool.dart';
 import '../internal/lz4_exception.dart';
+import '../internal/lz4_frame_constants.dart';
 import '../xxhash/xxh32.dart';
 import 'lz4_frame_options.dart';
-
-const _lz4FrameMagic = 0x184D2204;
-const _lz4SkippableMagicBase = 0x184D2A50;
-const _lz4SkippableMagicMask = 0xFFFFFFF0;
-const _lz4LegacyFrameMagic = 0x184C2102;
 
 StreamTransformer<List<int>, List<int>> lz4FrameDecoderTransformer({
   int? maxOutputBytes,
   Lz4DictionaryResolver? dictionaryResolver,
   Lz4BufferPool? bufferPool,
 }) {
+  // If maxOutputBytes is omitted, use a default limit of 256MB to prevent
+  // decompression bombs from exhausting memory. This matches the sync
+  // decoder (lz4FrameDecodeBytes). Users can override by providing their
+  // own limit or passing null explicitly for unbounded output.
+  const defaultMaxOutputBytes = 256 * 1024 * 1024;
   return StreamTransformer.fromBind((input) async* {
     final decoder = _Lz4FrameStreamDecoder(
-      maxOutputBytes: maxOutputBytes,
+      maxOutputBytes: maxOutputBytes ?? defaultMaxOutputBytes,
       dictionaryResolver: dictionaryResolver,
       bufferPool: bufferPool,
     );
@@ -74,7 +75,8 @@ final class _Lz4FrameStreamDecoder {
 
   int _flg = 0;
   int _bd = 0;
-  final List<int> _descriptorBytes = <int>[];
+  final Uint8List _descriptorBytes = Uint8List(16);
+  int _descriptorLen = 0;
 
   bool _blockIndependence = true;
   bool _blockChecksum = false;
@@ -122,16 +124,16 @@ final class _Lz4FrameStreamDecoder {
             return null;
           }
           final magic = _buf.readUint32LE();
-          if ((magic & _lz4SkippableMagicMask) == _lz4SkippableMagicBase) {
+          if ((magic & lz4SkippableMagicMask) == lz4SkippableMagicBase) {
             _state = _State.skippableSize;
             continue;
           }
-          if (magic == _lz4LegacyFrameMagic) {
+          if (magic == lz4LegacyFrameMagic) {
             _resetFrameState();
             _state = _State.legacyBlockSize;
             continue;
           }
-          if (magic != _lz4FrameMagic) {
+          if (magic != lz4FrameMagic) {
             throw const Lz4FormatException('Invalid LZ4 frame magic number');
           }
           _resetFrameState();
@@ -180,10 +182,9 @@ final class _Lz4FrameStreamDecoder {
 
           _flg = _buf.readUint8();
           _bd = _buf.readUint8();
-          _descriptorBytes
-            ..clear()
-            ..add(_flg)
-            ..add(_bd);
+          _descriptorLen = 0;
+          _descriptorBytes[_descriptorLen++] = _flg;
+          _descriptorBytes[_descriptorLen++] = _bd;
 
           final version = (_flg >> 6) & 0x03;
           if (version != 0x01) {
@@ -206,13 +207,15 @@ final class _Lz4FrameStreamDecoder {
             throw const Lz4FormatException('Reserved BD bits are set');
           }
 
-          _blockMaxSize = _decodeBlockMaxSize((_bd >> 4) & 0x07);
+          _blockMaxSize = decodeBlockMaxSize((_bd >> 4) & 0x07);
 
           if (_contentSizeFlag) {
             final low = _buf.readUint32LE();
             final high = _buf.readUint32LE();
-            _descriptorBytes.addAll(_u32le(low));
-            _descriptorBytes.addAll(_u32le(high));
+            _writeU32LE(_descriptorBytes, _descriptorLen, low);
+            _descriptorLen += 4;
+            _writeU32LE(_descriptorBytes, _descriptorLen, high);
+            _descriptorLen += 4;
 
             // Check for potential precision loss on Web (JS 53-bit integers).
             // 2^53 - 1 = 9007199254740991
@@ -239,7 +242,8 @@ final class _Lz4FrameStreamDecoder {
 
           if (_dictIdFlag) {
             final id = _buf.readUint32LE();
-            _descriptorBytes.addAll(_u32le(id));
+            _writeU32LE(_descriptorBytes, _descriptorLen, id);
+            _descriptorLen += 4;
             _dictId = id;
           }
 
@@ -252,7 +256,9 @@ final class _Lz4FrameStreamDecoder {
           }
           final hc = _buf.readUint8();
           final expectedHc =
-              (xxh32(Uint8List.fromList(_descriptorBytes), seed: 0) >> 8) &
+              (xxh32(Uint8List.sublistView(_descriptorBytes, 0, _descriptorLen),
+                          seed: 0) >>
+                      8) &
                   0xFF;
           if (hc != expectedHc) {
             throw const Lz4CorruptDataException('Header checksum mismatch');
@@ -346,7 +352,7 @@ final class _Lz4FrameStreamDecoder {
           }
 
           final next = _buf.peekUint32LE();
-          if (_isLegacyBoundary(next)) {
+          if (isLegacyBoundary(next)) {
             _state = _State.magic;
             continue;
           }
@@ -416,7 +422,7 @@ final class _Lz4FrameStreamDecoder {
           }
 
           final next = _buf.peekUint32LE();
-          if (_isLegacyBoundary(next)) {
+          if (isLegacyBoundary(next)) {
             _legacyPending = null;
             _state = _State.magic;
             return pending;
@@ -592,10 +598,8 @@ final class _Lz4FrameStreamDecoder {
 
     final drop = required - window;
     final keep = _historyLen - drop;
-    for (var i = 0; i < keep; i++) {
-      _history[i] = _history[i + drop];
-    }
-    _historyLen -= drop;
+    List.copyRange(_history, 0, _history, drop, drop + keep);
+    _historyLen = keep;
     _history.setRange(_historyLen, _historyLen + bytes.length, bytes);
     _historyLen += bytes.length;
   }
@@ -613,7 +617,7 @@ final class _Lz4FrameStreamDecoder {
 
     _flg = 0;
     _bd = 0;
-    _descriptorBytes.clear();
+    _descriptorLen = 0;
 
     _blockIndependence = true;
     _blockChecksum = false;
@@ -637,28 +641,6 @@ final class _Lz4FrameStreamDecoder {
 
     _legacyBlockCSize = 0;
     _legacyPending = null;
-  }
-
-  int _decodeBlockMaxSize(int bd) {
-    switch (bd) {
-      case 4:
-        return 64 * 1024;
-      case 5:
-        return 256 * 1024;
-      case 6:
-        return 1024 * 1024;
-      case 7:
-        return 4 * 1024 * 1024;
-      default:
-        throw const Lz4FormatException('Invalid block maximum size');
-    }
-  }
-
-  bool _isLegacyBoundary(int magic) {
-    if (magic == _lz4FrameMagic || magic == _lz4LegacyFrameMagic) {
-      return true;
-    }
-    return (magic & _lz4SkippableMagicMask) == _lz4SkippableMagicBase;
   }
 }
 
@@ -807,5 +789,9 @@ final class _ChunkBuffer {
   }
 }
 
-List<int> _u32le(int v) =>
-    <int>[v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >> 24) & 0xff];
+void _writeU32LE(Uint8List dst, int offset, int v) {
+  dst[offset] = v & 0xff;
+  dst[offset + 1] = (v >> 8) & 0xff;
+  dst[offset + 2] = (v >> 16) & 0xff;
+  dst[offset + 3] = (v >> 24) & 0xff;
+}

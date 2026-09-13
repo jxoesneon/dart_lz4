@@ -18,7 +18,8 @@ import 'src/frame/lz4_frame_options.dart'
 export 'src/internal/lz4_exception.dart';
 export 'src/internal/lz4_buffer_pool.dart'
     show Lz4BufferPool, SimpleLz4BufferPool, SecureLz4BufferPool;
-export 'src/block/lz4_sized_block.dart';
+export 'src/block/lz4_sized_block.dart'
+    show lz4CompressWithSize, lz4DecompressWithSize, Lz4CompressionLevel;
 export 'src/frame/lz4_frame_info.dart' show Lz4FrameInfo, lz4FrameInfo;
 export 'src/frame/lz4_frame_options.dart'
     show
@@ -27,25 +28,18 @@ export 'src/frame/lz4_frame_options.dart'
         Lz4FrameCompression,
         Lz4DictionaryResolver;
 export 'src/hc/lz4_hc_options.dart' show Lz4HcOptions, Lz4HcLevel;
+export 'src/lz4_codec.dart' show Lz4Codec;
 
 import 'src/internal/lz4_buffer_pool.dart';
 import 'src/block/lz4_block_decoder.dart';
 import 'src/block/lz4_block_encoder.dart';
+import 'src/block/lz4_sized_block.dart' show Lz4CompressionLevel;
 import 'src/frame/lz4_frame_decoder.dart';
 import 'src/frame/lz4_frame_encoder.dart';
 import 'src/frame/lz4_frame_stream_decoder.dart';
 import 'src/frame/lz4_frame_stream_encoder.dart';
 import 'src/hc/lz4_hc_block_encoder.dart';
 import 'src/hc/lz4_hc_options.dart';
-
-/// Compression level for [lz4Compress].
-enum Lz4CompressionLevel {
-  /// Fast compression (lower ratio, higher throughput).
-  fast,
-
-  /// High-compression mode (higher ratio, lower throughput).
-  hc,
-}
 
 /// Compresses [src] into an LZ4 *block*.
 ///
@@ -154,8 +148,11 @@ Uint8List lz4FrameEncodeWithOptions(
 
 /// Decodes one or more concatenated LZ4 frames from [src].
 ///
-/// If [maxOutputBytes] is provided, decoding will stop with an [Exception] if
-/// the decompressed output would exceed that limit.
+/// If [maxOutputBytes] is omitted, a default limit of 256 MiB is enforced to
+/// prevent decompression bombs.
+///
+/// If [bufferPool] is provided, temporary decode buffers are recycled through
+/// the pool.
 ///
 /// If the frame requires a dictionary (indicated by a dictionary ID),
 /// [dictionaryResolver] must be provided to look up the dictionary bytes.
@@ -163,11 +160,13 @@ Uint8List lz4FrameDecode(
   Uint8List src, {
   int? maxOutputBytes,
   Lz4DictionaryResolver? dictionaryResolver,
+  Lz4BufferPool? bufferPool,
 }) {
   return lz4FrameDecodeBytes(
     src,
     maxOutputBytes: maxOutputBytes,
     dictionaryResolver: dictionaryResolver,
+    bufferPool: bufferPool,
   );
 }
 
@@ -175,18 +174,24 @@ Uint8List lz4FrameDecode(
 ///
 /// This is useful when the frame arrives in chunks (e.g. network/file streams).
 ///
-/// If [maxOutputBytes] is provided, decoding will stop with an [Exception] if
-/// the decompressed output would exceed that limit.
+/// If [maxOutputBytes] is omitted, a default limit of 256 MiB is enforced to
+/// prevent decompression bombs. Pass an explicit [maxOutputBytes] to override,
+/// or `null` (via the internal API) for unbounded output.
+///
+/// If [bufferPool] is provided, temporary decode buffers are recycled through
+/// the pool.
 ///
 /// If the frame requires a dictionary (indicated by a dictionary ID),
 /// [dictionaryResolver] must be provided to look up the dictionary bytes.
 StreamTransformer<List<int>, List<int>> lz4FrameDecoder({
   int? maxOutputBytes,
   Lz4DictionaryResolver? dictionaryResolver,
+  Lz4BufferPool? bufferPool,
 }) {
   return lz4FrameDecoderTransformer(
     maxOutputBytes: maxOutputBytes,
     dictionaryResolver: dictionaryResolver,
+    bufferPool: bufferPool,
   );
 }
 
